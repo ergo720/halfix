@@ -2,3 +2,5 @@
 *.o
 *.a
 halfix
+[Bb]uild/
+[Bb]uild-*/
