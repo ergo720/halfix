@@ -1,0 +1,3 @@
+[submodule "import/lib86cpu"]
+	path = import/lib86cpu
+	url = https://github.com/ergo720/lib86cpu

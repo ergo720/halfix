@@ -14,6 +14,9 @@ set(CMAKE_CXX_STANDARD 20)
 
 find_package(ZLIB REQUIRED)
 
+option(LIB86CPU_BUILD_SHARED_LIB "Build shared libraries" OFF)
+add_subdirectory("import/lib86cpu")
+
 if (WIN32 AND MSVC)
 message("Building for Windows")
 set(PLATFORM_SRC
@@ -24,7 +27,7 @@ message(FATAL_ERROR "Only Windows builds with msvc are supported for now")
 endif()
 
 message("Building halfix")
-include_directories(${HALFIX_ROOT_DIR}/include ${ZLIB_INCLUDE_DIRS})
+include_directories(${HALFIX_ROOT_DIR}/include ${ZLIB_INCLUDE_DIRS} ${HALFIX_ROOT_DIR}/import/lib86cpu/lib86cpu)
 
 set(HEADERS
  "${HALFIX_ROOT_DIR}/include/cpuapi.h"
@@ -106,9 +109,11 @@ source_group(TREE ${HALFIX_ROOT_DIR} PREFIX source FILES ${SOURCES})
 
 if (MSVC)
 add_definitions(-D_CRT_SECURE_NO_WARNINGS -D_CRT_NONSTDC_NO_WARNINGS -D_SCL_SECURE_NO_WARNINGS)
-else ()
-message(FATAL_ERROR "Only msvc is supported for now")
 endif()
 
 add_executable(halfix ${HEADERS} ${SOURCES})
-target_link_libraries(halfix PUBLIC ${ZLIB_LIBRARIES})
+target_link_libraries(halfix PUBLIC ${ZLIB_LIBRARIES} cpu)
+
+if (MSVC)
+set_property(DIRECTORY "${HALFIX_ROOT_DIR}" PROPERTY VS_STARTUP_PROJECT halfix)
+endif()
