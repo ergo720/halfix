@@ -12,7 +12,7 @@ I made this mostly for fun, and because it was a great way to learn about the x8
 
 ## Building and Running
 
-This fork is focused only on Windows compatibility for now. You will need a C++20 compatible compiler, `zlib` and Visual Studio 2022. Only 64 bit builds are supported.
+This fork is focused only on Windows compatibility for now. You will need a C++20 compatible compiler, zlib, cmake and Visual Studio 2022. Only 64 bit builds are supported.
 
 1. `cd` to the directory of halfix
 2. `mkdir build && cd build`
