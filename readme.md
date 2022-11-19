@@ -12,41 +12,12 @@ I made this mostly for fun, and because it was a great way to learn about the x8
 
 ## Building and Running
 
-You will need `node.js`, a C99-compatible compiler, `zlib`, and Emscripten (only if you're targeting the browser). Make sure that the required libraries are in a place where the compiler can find them. No pre-build configuration is required. 
+This fork is focused only on Windows compatibility for now. You will need a C++20 compatible compiler, `zlib` and Visual Studio 2022. Only 64 bit builds are supported.
 
-The display driver uses `libsdl`, but if you're on Windows, there's a native port that uses the Win32 API and doesn't require SDL. 
-
-```bash
-# Debug, native
-node makefile.js
-# Debug, Emscripten, asm.js
-node makefile.js emscripten
-# Debug, Emscripten, WebAssembly
-node makefile.js emscripten --enable-wasm
-
-# Release, native
-node makefile.js release
-# Release, Emscripten, asm.js
-node makefile.js emscripten release
-# Release, Emscripten, WebAssembly
-node makefile.js emscripten --enable-wasm release
-
-# Win32 API build (no SDL required)
-node makefile.js win32
-# Win32 API build, release
-node makefile.js win32 release
-
-# For more options and fine tuning
-node makefile.js --help
-
-# Chunk an image 
-node tools/imgsplit.js os.img
-
-# Run in browser
-http-server
-```
-
-Check the [project wiki](https://github.com/nepx/halfix/wiki) for more details. 
+1. `cd` to the directory of halfix
+2. `mkdir build && cd build`
+3. `cmake .. -G "Visual Studio 17 2022" -A x64 -Thost=x64`
+4. Build the resulting solution file lib86cpu.sln with Visual Studio
 
 ## System Specifications
 
