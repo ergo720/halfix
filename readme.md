@@ -17,7 +17,7 @@ This fork is focused only on Windows compatibility for now. You will need a C++2
 1. `cd` to the directory of halfix
 2. `mkdir build && cd build`
 3. `cmake .. -G "Visual Studio 17 2022" -A x64 -Thost=x64`
-4. Build the resulting solution file lib86cpu.sln with Visual Studio
+4. Build the resulting solution file halfix.sln with Visual Studio
 
 ## System Specifications
 
