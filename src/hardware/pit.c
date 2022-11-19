@@ -1,7 +1,7 @@
 // Programmable interrupt timer emulation
 // http://www.brokenthorn.com/Resources/OSDevPit.html
 #include "devices.h"
-#include "io.h"
+#include "mmio.h"
 #include "state.h"
 #include "util.h"
 #include <stdint.h>
@@ -251,7 +251,9 @@ static void pit_writeb(uint32_t port, uint32_t value)
                 }
             }
             break;
-        case 0 ... 2: {
+        case 0:
+        case 1:
+        case 2: {
             struct pit_channel* chan = &pit.chan[channel];
             if (!access) {
                 //PIT_LOG("I/O Latched counter %d [ticks: %08x]\n", channel, pit_get_count(chan));
@@ -278,7 +280,9 @@ static void pit_writeb(uint32_t port, uint32_t value)
         }
         break;
     }
-    case 0 ... 2: {
+    case 0:
+    case 1:
+    case 2: {
         struct pit_channel* chan = &pit.chan[channel];
         switch (chan->wmode) {
         case 0:

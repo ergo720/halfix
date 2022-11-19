@@ -2,7 +2,7 @@
 //  Can be simulated optionally.
 // https://pdos.csail.mit.edu/6.828/2018/readings/ia32/ioapic.pdf
 
-#include "io.h"
+#include "mmio.h"
 #include "devices.h"
 #include "pc.h"
 
@@ -119,7 +119,54 @@ static uint32_t ioapic_read(uint32_t addr)
                 (0x17 << 16); // Maximum Redirection Entry
         case IOAPICARB:
             return ioapic.arbitration_id; // Something to do with buses...
-        case 0x10 ... 0x3F: {
+        case 0x10:
+        case 0x11:
+        case 0x12:
+        case 0x13:
+        case 0x14:
+        case 0x15:
+        case 0x16:
+        case 0x17:
+        case 0x18:
+        case 0x19:
+        case 0x1A:
+        case 0x1B:
+        case 0x1C:
+        case 0x1D:
+        case 0x1E:
+        case 0x1F:
+        case 0x20:
+        case 0x21:
+        case 0x22:
+        case 0x23:
+        case 0x24:
+        case 0x25:
+        case 0x26:
+        case 0x27:
+        case 0x28:
+        case 0x29:
+        case 0x2A:
+        case 0x2B:
+        case 0x2C:
+        case 0x2D:
+        case 0x2E:
+        case 0x2F:
+        case 0x30:
+        case 0x31:
+        case 0x32:
+        case 0x33:
+        case 0x34:
+        case 0x35:
+        case 0x36:
+        case 0x37:
+        case 0x38:
+        case 0x39:
+        case 0x3A:
+        case 0x3B:
+        case 0x3C:
+        case 0x3D:
+        case 0x3E:
+        case 0x3F: {
             // Modify I/O indirection table. Note that each quantity is 64 bits wide. Modifying this is like modifying the PIC's IMR
             return ioapic.redtbl[(ioapic.register_selected & 0xFF) - 0x10];
             break;
@@ -147,7 +194,54 @@ static void ioapic_write(uint32_t addr, uint32_t data)
         case IOAPICID:
             ioapic.id = data & 0x0F000000;
             break;
-        case 0x10 ... 0x3F: {
+        case 0x10:
+        case 0x11:
+        case 0x12:
+        case 0x13:
+        case 0x14:
+        case 0x15:
+        case 0x16:
+        case 0x17:
+        case 0x18:
+        case 0x19:
+        case 0x1A:
+        case 0x1B:
+        case 0x1C:
+        case 0x1D:
+        case 0x1E:
+        case 0x1F:
+        case 0x20:
+        case 0x21:
+        case 0x22:
+        case 0x23:
+        case 0x24:
+        case 0x25:
+        case 0x26:
+        case 0x27:
+        case 0x28:
+        case 0x29:
+        case 0x2A:
+        case 0x2B:
+        case 0x2C:
+        case 0x2D:
+        case 0x2E:
+        case 0x2F:
+        case 0x30:
+        case 0x31:
+        case 0x32:
+        case 0x33:
+        case 0x34:
+        case 0x35:
+        case 0x36:
+        case 0x37:
+        case 0x38:
+        case 0x39:
+        case 0x3A:
+        case 0x3B:
+        case 0x3C:
+        case 0x3D:
+        case 0x3E:
+        case 0x3F: {
             // Modify I/O indirection table. Note that each quantity is 64 bits wide. Modifying this is like modifying the PIC's IMR
             uint32_t idx = (ioapic.register_selected & 0xFF) - 0x10;
             if (data != ioapic.redtbl[idx]) {

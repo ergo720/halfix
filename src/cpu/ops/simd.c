@@ -6,7 +6,7 @@
 #include "cpu/cpu.h"
 #include "cpu/fpu.h"
 #include "cpu/instrument.h"
-#include "io.h"
+#include "mmio.h"
 #include <string.h>
 #define EXCEPTION_HANDLER return 1
 
@@ -109,7 +109,7 @@ union {
     uint32_t d64[2];
     uint32_t d128[4];
 } temp;
-static void* result_ptr;
+static uint8_t* result_ptr;
 static int write_back, write_back_dwords, write_back_linaddr;
 
 // Flush data in temp.d128 back out to memory. This is required if write_back == 1

@@ -375,7 +375,8 @@ static uint64_t ide_get_sector_offset(struct ide_controller* ctrl, int lba48)
         res |= (ctrl->cylinder_high & 0xFF) << 16;
         res |= (ctrl->drive_and_head & 0x0F) << 24;
         break;
-    case 2 ... 3: { // LBA48 commands override any IDE setting you may have set.
+    case 2:
+    case 3: { // LBA48 commands override any IDE setting you may have set.
         res = ctrl->sector_number & 0xFF;
         res |= (uint64_t)(ctrl->cylinder_low & 0xFF) << 8L;
         res |= (uint64_t)(ctrl->cylinder_high & 0xFF) << 16L;
@@ -1665,7 +1666,7 @@ static void ide_write_dma_handler(void* this, int status)
         IDE_LOG(" -- Length: %08x [real: %08x] End? %s\n", count, dma_bytes, end ? "Yes" : "No");
         IDE_LOG(" -- sector: %llx\n", (unsigned long long)offset >> 9);
         while (dma_bytes >= 512) {
-            int res = drive_write(drv, NULL, mem + dest, 512, offset, NULL);
+            int res = drive_write(drv, NULL, (uint8_t *)mem + dest, 512, offset, NULL);
             if (res != DRIVE_RESULT_SYNC)
                 IDE_FATAL("Expected sync response for prefetched data\n");
             dma_bytes -= 512;
@@ -1757,7 +1758,22 @@ static void ide_write(uint32_t port, uint32_t data)
             } else
                 ide_abort_command(ctrl);
             break;
-        case 0x10 ... 0x1F: // Calibrate Drive
+        case 0x10:
+        case 0x11:
+        case 0x12:
+        case 0x13:
+        case 0x14:
+        case 0x15:
+        case 0x16:
+        case 0x17:
+        case 0x18:
+        case 0x19:
+        case 0x1A:
+        case 0x1B:
+        case 0x1C:
+        case 0x1D:
+        case 0x1E:
+        case 0x1F: // Calibrate Drive
             if (SELECTED(ctrl, type) != DRIVE_TYPE_DISK)
                 ide_abort_command(ctrl);
             if (!selected_drive_has_media(ctrl)) {
@@ -2057,7 +2073,10 @@ void ide_write_prdt(uint32_t addr, uint32_t data)
     case 2:
         this->dma_status &= ~(data & 6);
         break;
-    case 4 ... 7: {
+    case 4:
+    case 5:
+    case 6:
+    case 7: {
         int shift = ((addr & 3) << 3);
         this->prdt_address &= ~(0xFF << shift);
         this->prdt_address |= data << shift;

@@ -208,7 +208,9 @@ void cpuid(void)
         cpu.reg32[ECX] = cpu.reg32[EDX] = cpu.reg32[EAX] = 0;
 #endif
         break;
-    case 0x80000002 ... 0x80000004: {
+    case 0x80000002:
+    case 0x80000003:
+    case 0x80000004: {
         static const char* brand_string =
 #ifdef P4_SUPPORT
             "              Intel(R) Pentium(R) 4 CPU 1.80GHz"
@@ -263,7 +265,14 @@ void cpuid(void)
     default:
         CPU_DEBUG("Unknown CPUID level: 0x%08x\n", cpu.reg32[EAX]);
         goto __annoying_gcc_workaround;
-    case 0x80860000 ... 0x80860007: // Transmeta
+    case 0x80860000:
+    case 0x80860001:
+    case 0x80860002:
+    case 0x80860003:
+    case 0x80860004:
+    case 0x80860005:
+    case 0x80860006:
+    case 0x80860007: // Transmeta
 __annoying_gcc_workaround:
         cpu.reg32[EAX] = 0;
         cpu.reg32[ECX] = cpu.reg32[EDX] = cpu.reg32[EBX] = 0;
@@ -280,10 +289,56 @@ int rdmsr(uint32_t index, uint32_t* high, uint32_t* low)
             EXCEPTION_GP(0);
         value = cpu.apic_base;
         break;
-    case 0x250 ... 0x26F:
+    case 0x250:
+    case 0x251:
+    case 0x252:
+    case 0x253:
+    case 0x254:
+    case 0x255:
+    case 0x256:
+    case 0x257:
+    case 0x258:
+    case 0x259:
+    case 0x25A:
+    case 0x25B:
+    case 0x25C:
+    case 0x25D:
+    case 0x25E:
+    case 0x25F:
+    case 0x260:
+    case 0x261:
+    case 0x262:
+    case 0x263:
+    case 0x264:
+    case 0x265:
+    case 0x266:
+    case 0x267:
+    case 0x268:
+    case 0x269:
+    case 0x26A:
+    case 0x26B:
+    case 0x26C:
+    case 0x26D:
+    case 0x26E:
+    case 0x26F:
         value = cpu.mtrr_fixed[index - 0x250];
         break;
-    case 0x200 ... 0x20F:
+    case 0x200:
+    case 0x201:
+    case 0x202:
+    case 0x203:
+    case 0x204:
+    case 0x205:
+    case 0x206:
+    case 0x207:
+    case 0x208:
+    case 0x209:
+    case 0x20A:
+    case 0x20B:
+    case 0x20C:
+    case 0x20D:
+    case 0x20E:
+    case 0x20F:
         value = cpu.mtrr_variable_addr_mask[index ^ 0x200];
         break;
     case 0x277:
@@ -296,7 +351,9 @@ int rdmsr(uint32_t index, uint32_t* high, uint32_t* low)
         CPU_LOG("Unknown MSR read: 0x%x\n", index);
         value = 0;
         break;
-    case 0x174 ... 0x176:
+    case 0x174:
+    case 0x175:
+    case 0x176:
         value = cpu.sysenter[index - 0x174];
         break;
     case 0xFE: // MTRR
@@ -329,7 +386,9 @@ int wrmsr(uint32_t index, uint32_t high, uint32_t low)
     case 0x1B:
         cpu.apic_base = msr_value;
         break;
-    case 0x174 ... 0x176: // SYSENTER
+    case 0x174:
+    case 0x175:
+    case 0x176: // SYSENTER
         cpu.sysenter[index - 0x174] = low;
         break;
     case 0x8B: // ??
@@ -346,10 +405,56 @@ int wrmsr(uint32_t index, uint32_t high, uint32_t low)
     case 0xFE:
         CPU_LOG("Unknown MSR: 0x%x\n", index);
         break;
-    case 0x250 ... 0x26F:
+    case 0x250:
+    case 0x251:
+    case 0x252:
+    case 0x253:
+    case 0x254:
+    case 0x255:
+    case 0x256:
+    case 0x257:
+    case 0x258:
+    case 0x259:
+    case 0x25A:
+    case 0x25B:
+    case 0x25C:
+    case 0x25D:
+    case 0x25E:
+    case 0x25F:
+    case 0x260:
+    case 0x261:
+    case 0x262:
+    case 0x263:
+    case 0x264:
+    case 0x265:
+    case 0x266:
+    case 0x267:
+    case 0x268:
+    case 0x269:
+    case 0x26A:
+    case 0x26B:
+    case 0x26C:
+    case 0x26D:
+    case 0x26E:
+    case 0x26F:
         cpu.mtrr_fixed[index - 0x250] = msr_value;
         break;
-    case 0x200 ... 0x20F:
+    case 0x200:
+    case 0x201:
+    case 0x202:
+    case 0x203:
+    case 0x204:
+    case 0x205:
+    case 0x206:
+    case 0x207:
+    case 0x208:
+    case 0x209:
+    case 0x20A:
+    case 0x20B:
+    case 0x20C:
+    case 0x20D:
+    case 0x20E:
+    case 0x20F:
         cpu.mtrr_variable_addr_mask[index ^ 0x200] = msr_value;
         break;
     case 0x277:
@@ -548,7 +653,10 @@ uint32_t lar(uint16_t op1, uint32_t op2)
     case INTERRUPT_GATE_386: // 14
     case TRAP_GATE_386: // 15
         goto invalid;
-    case 0x18 ... 0x1B:
+    case 0x18:
+    case 0x19:
+    case 0x1A:
+    case 0x1B:
         // Non-conforming code segment
         dpl = ACCESS_DPL(op_access);
         // DPL must be >= cpl and rpl
@@ -556,7 +664,10 @@ uint32_t lar(uint16_t op1, uint32_t op2)
             goto invalid;
 
     // INTENTIONAL FALLTHROUGH
-    case 0x1C ... 0x1F: // Conforming code segment (no checks)
+    case 0x1C:
+    case 0x1D:
+    case 0x1E:
+    case 0x1F:  // Conforming code segment (no checks)
     default:
         cpu_set_zf(1);
         return op_info.raw[1] & 0xFFFF00;
@@ -585,11 +696,20 @@ uint32_t lsl(uint16_t op, uint32_t op2)
     op_access = DESC_ACCESS(&op_info);
     switch (ACCESS_TYPE(op_access)) {
     case 0:
-    case 4 ... 7:
-    case 12 ... 15:
+    case 4:
+    case 5:
+    case 6:
+    case 7:
+    case 12:
+    case 13:
+    case 14:
+    case 15:
     case 0x1E:
         goto invalid;
-    case 0x18 ... 0x1B:
+    case 0x18:
+    case 0x19:
+    case 0x1A:
+    case 0x1B:
         // Non-conforming code segment
         dpl = ACCESS_DPL(op_access);
         // DPL must be >= cpl and rpl

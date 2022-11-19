@@ -1131,7 +1131,8 @@ int fpu_reg_op(struct decoded_instruction* i, uint32_t flags)
         break;
     case OP(0xDB, 4):
         switch (opcode & 7) {
-        case 0 ... 1:
+        case 0:
+        case 1:
         case 4:
             // All 286 opcodes, nop
             return 0;

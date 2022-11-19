@@ -279,7 +279,38 @@ static void kbd_write(uint32_t port, uint32_t data)
         kbd.status &= ~STATUS_CMD;
         //kbd.command = data;
         switch (data) {
-        case 0x20 ... 0x3F: { // Read internal RAM, although only 0x20 is documented
+        case 0x20:
+        case 0x21:
+        case 0x22:
+        case 0x23:
+        case 0x24:
+        case 0x25:
+        case 0x26:
+        case 0x27:
+        case 0x28:
+        case 0x29:
+        case 0x2A:
+        case 0x2B:
+        case 0x2C:
+        case 0x2D:
+        case 0x2E:
+        case 0x2F:
+        case 0x30:
+        case 0x31:
+        case 0x32:
+        case 0x33:
+        case 0x34:
+        case 0x35:
+        case 0x36:
+        case 0x37:
+        case 0x38:
+        case 0x39:
+        case 0x3A:
+        case 0x3B:
+        case 0x3C:
+        case 0x3D:
+        case 0x3E:
+        case 0x3F: { // Read internal RAM, although only 0x20 is documented
             int address = kbd.command & 0x1F;
             if (address == 0)
                 kbd_add(KBD_QUEUE, kbd.ram[0] | (kbd.status & STATUS_SYSFLAG));
@@ -287,11 +318,57 @@ static void kbd_write(uint32_t port, uint32_t data)
                 kbd_add(KBD_QUEUE, kbd.ram[address]);
             break;
         }
-        case 0x60 ... 0x7F: // Write to internal RAM - receives parameter
+        case 0x60:
+        case 0x61:
+        case 0x62:
+        case 0x63:
+        case 0x64:
+        case 0x65:
+        case 0x66:
+        case 0x67:
+        case 0x68:
+        case 0x69:
+        case 0x6A:
+        case 0x6B:
+        case 0x6C:
+        case 0x6D:
+        case 0x6E:
+        case 0x6F:
+        case 0x70:
+        case 0x71:
+        case 0x72:
+        case 0x73:
+        case 0x74:
+        case 0x75:
+        case 0x76:
+        case 0x77:
+        case 0x78:
+        case 0x79:
+        case 0x7A:
+        case 0x7B:
+        case 0x7C:
+        case 0x7D:
+        case 0x7E:
+        case 0x7F: // Write to internal RAM - receives parameter
             kbd.status |= STATUS_CMD;
             kbd.command = data;
             break;
-        case 0xF0 ... 0xFF: // Pulse output line
+        case 0xF0:
+        case 0xF1:
+        case 0xF2:
+        case 0xF3:
+        case 0xF4:
+        case 0xF5:
+        case 0xF6:
+        case 0xF7:
+        case 0xF8:
+        case 0xF9:
+        case 0xFA:
+        case 0xFB:
+        case 0xFC:
+        case 0xFD:
+        case 0xFE:
+        case 0xFF: // Pulse output line
             if ((data & 1) == 0) {
                 printf("System reset requested -- start the emulator again\n");
                 exit(0);
@@ -301,7 +378,8 @@ static void kbd_write(uint32_t port, uint32_t data)
             kbd_add(KBD_QUEUE, 0);
             //kbd.command = NO_COMMAND;
             break;
-        case 0xA7 ... 0xA8: // Disable (A7)/Enable (A8) aux port
+        case 0xA7:
+        case 0xA8: // Disable (A7)/Enable (A8) aux port
             kbd.ram[0] &= ~COMMAND_AUX_DISABLED;
             kbd.ram[0] |= (data & 1) ? COMMAND_AUX_DISABLED : 0;
 
@@ -327,7 +405,8 @@ static void kbd_write(uint32_t port, uint32_t data)
             kbd_add(KBD_QUEUE, 0);
             //kbd.command = NO_COMMAND;
             break;
-        case 0xAD ... 0xAE: // Disable (AD)/Enable (AE) Keyboard
+        case 0xAD:
+        case 0xAE: // Disable (AD)/Enable (AE) Keyboard
             kbd.ram[0] &= ~COMMAND_KBD_DISABLED;
             kbd.ram[0] |= (data & 1) ? COMMAND_KBD_DISABLED : 0;
 
@@ -347,7 +426,10 @@ static void kbd_write(uint32_t port, uint32_t data)
             kbd_add(KBD_QUEUE, 0x40);
             //kbd.command = NO_COMMAND;
             break;
-        case 0xD1 ... 0xD4: // Outport utilities
+        case 0xD1:
+        case 0xD2:
+        case 0xD3:
+        case 0xD4: // Outport utilities
             kbd.status |= STATUS_CMD;
             kbd.command = data;
             break;
@@ -381,7 +463,8 @@ static void kbd_write(uint32_t port, uint32_t data)
                 kbd.command = data;
                 kbd_add(KBD_QUEUE, 0xFA); // ACK the command
                 break;
-            case 0xF4 ... 0xF5: // Enable (F4)/Disable (F5) scanning
+            case 0xF4:
+            case 0xF5: // Enable (F4)/Disable (F5) scanning
                 kbd.keyboard_disable_scanning = data & 1;
                 kbd_add(KBD_QUEUE, 0xFA);
                 break;
@@ -415,7 +498,38 @@ static void kbd_write(uint32_t port, uint32_t data)
                 KBD_FATAL("TODO: Command %02x\n", data);
             }
             break;
-        case 0x60 ... 0x7F: // Write to internal RAM
+        case 0x60:
+        case 0x61:
+        case 0x62:
+        case 0x63:
+        case 0x64:
+        case 0x65:
+        case 0x66:
+        case 0x67:
+        case 0x68:
+        case 0x69:
+        case 0x6A:
+        case 0x6B:
+        case 0x6C:
+        case 0x6D:
+        case 0x6E:
+        case 0x6F:
+        case 0x70:
+        case 0x71:
+        case 0x72:
+        case 0x73:
+        case 0x74:
+        case 0x75:
+        case 0x76:
+        case 0x77:
+        case 0x78:
+        case 0x79:
+        case 0x7A:
+        case 0x7B:
+        case 0x7C:
+        case 0x7D:
+        case 0x7E:
+        case 0x7F: // Write to internal RAM
             if (command == 0x60) {
                 //kbd.command = data;
                 KBD_LOG("Command byte: %02x\n", kbd.command);
@@ -446,7 +560,8 @@ static void kbd_write(uint32_t port, uint32_t data)
                 break;
             case NO_COMMAND:
                 switch (data) {
-                case 0xE6 ... 0xE7: // Set scaling 1:1 (0xE6) or 1:2 (0xE7)
+                case 0xE6:
+                case 0xE7: // Set scaling 1:1 (0xE6) or 1:2 (0xE7)
                     kbd.mouse_scaling1to2 = data & 1;
                     kbd_add(AUX_QUEUE, 0xFA);
                     break;
@@ -473,7 +588,8 @@ static void kbd_write(uint32_t port, uint32_t data)
                     kbd.mouse_command = data;
                     kbd_add(AUX_QUEUE, 0xFA);
                     break;
-                case 0xF4 ... 0xF5: // Enable (F4)/disable (F5) packet
+                case 0xF4:
+                case 0xF5: // Enable (F4)/disable (F5) packet
                     kbd.mouse_stream_inactive = data & 1;
                     kbd_add(AUX_QUEUE, 0xFA);
                     break;

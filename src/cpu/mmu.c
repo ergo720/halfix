@@ -1,7 +1,7 @@
 // Handles memory mapping
 #include "cpu/cpu.h"
 #include "cpu/instrument.h"
-#include "io.h"
+#include "mmio.h"
 
 #define EXCEPTION_HANDLER return 1
 
@@ -9,7 +9,7 @@
 void* get_phys_ram_ptr(uint32_t addr, int write);
 void* get_lin_ram_ptr(uint32_t addr, int flags, int* fault);
 #else
-#define get_phys_ram_ptr(a, b) (cpu.mem + a)
+#define get_phys_ram_ptr(a, b) ((uint8_t *)cpu.mem + a)
 #define get_lin_ram_ptr(a, b) NULL
 #endif
 

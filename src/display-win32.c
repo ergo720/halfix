@@ -71,6 +71,7 @@ static void display_capture_mouse(int yes)
 // https://stanislavs.org/helppc/make_codes.html
 static int win32_to_scancode(int w)
 {
+    // NOTE: this code might be replaced by calling MapVirtualKeyA instead
     switch (w) {
     case VK_BACK:
         return 0x0E;
@@ -96,7 +97,18 @@ static int win32_to_scancode(int w)
         return 0x39;
     case VK_TAB:
         return 0x0F;
-    case VK_F1... VK_F12:
+    case VK_F1:
+    case VK_F2:
+    case VK_F3:
+    case VK_F4:
+    case VK_F5:
+    case VK_F6:
+    case VK_F7:
+    case VK_F8:
+    case VK_F9:
+    case VK_F10:
+    case VK_F11:
+    case VK_F12:
         return w - VK_F1 + 0x3B;
     case VK_NUMPAD0:
         return 0x52;
@@ -127,7 +139,15 @@ static int win32_to_scancode(int w)
     case VK_ADD:
         return 0x4E;
 
-    case 0x31 ... 0x39: // 1-9
+    case 0x31:
+    case 0x32:
+    case 0x33:
+    case 0x34:
+    case 0x35:
+    case 0x36:
+    case 0x37:
+    case 0x38:
+    case 0x39: // 1-9
         return w + 2 - 0x31;
     case 0x30: // 0
         return 0x0B;
@@ -229,6 +249,9 @@ static int win32_to_scancode(int w)
         return 0xE04D;
     case VK_UP:
         return 0xE048;
+    default:
+        printf("Unexpected Win32 virtual key code received -- aborting\n");
+        abort();
     }
 }
 

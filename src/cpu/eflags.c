@@ -55,7 +55,9 @@ int cpu_get_of(void)
     case MUL:
         return cpu.lop1 != cpu.lop2;
     case BIT:
-    case SAR8... SAR32:
+    case SAR8:
+    case SAR16:
+    case SAR32:
         return 0;
     case ADD8:
         lop1 = cpu.lr - cpu.lop2;
@@ -141,29 +143,49 @@ int cpu_get_af(void)
     switch (cpu.laux & LAUX_METHOD_MASK) {
     case BIT:
     case MUL:
-    case SHL8... SHL32:
-    case SHR8... SHR32:
-    case SHLD16... SHLD32:
-    case SHRD16... SHRD32:
+    case SHL8:
+    case SHL16:
+    case SHL32:
+    case SHR8:
+    case SHR16:
+    case SHR32:
+    case SHLD16:
+    case SHLD32:
+    case SHRD16:
+    case SHRD32:
         return 0;
-    case SAR8... SAR32:
+    case SAR8:
+    case SAR16:
+    case SAR32:
 #if 0
         return cpu.lr & 1;
 #else
         return 0;
 #endif
-    case ADD8... ADD32:
+    case ADD8:
+    case ADD16:
+    case ADD32:
         lop1 = cpu.lr - cpu.lop2;
         return (lop1 ^ cpu.lop2 ^ cpu.lr) >> 4 & 1;
-    case SUB8... SUB32:
+    case SUB8:
+    case SUB16:
+    case SUB32:
         lop1 = cpu.lr + cpu.lop2;
         return (lop1 ^ cpu.lop2 ^ cpu.lr) >> 4 & 1;
-    case ADC8... ADC32:
-    case SBB8... SBB32:
+    case ADC8:
+    case ADC16:
+    case ADC32:
+    case SBB8:
+    case SBB16:
+    case SBB32:
         return (cpu.lop1 ^ cpu.lop2 ^ cpu.lr) >> 4 & 1;
-    case INC8... INC32:
+    case INC8:
+    case INC16:
+    case INC32:
         return (cpu.lr & 15) == 0;
-    case DEC8... DEC32:
+    case DEC8:
+    case DEC16:
+    case DEC32:
         return (cpu.lr & 15) == 15;
     case EFLAGS_FULL_UPDATE:
         return cpu.eflags >> 4 & 1;
@@ -235,8 +257,12 @@ int cpu_get_cf(void)
     case SHRD16:
     case SHRD32:
         return cpu.lop1 >> (cpu.lop2 - 1) & 1;
-    case INC8... INC32:
-    case DEC8... DEC32:
+    case INC8:
+    case INC16:
+    case INC32:
+    case DEC8:
+    case DEC16:
+    case DEC32:
     case EFLAGS_FULL_UPDATE:
         return cpu.eflags & 1;
     case BIT:

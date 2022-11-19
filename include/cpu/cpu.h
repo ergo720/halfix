@@ -1,6 +1,7 @@
 #ifndef CPU_H
 #define CPU_H
 
+#include "platform.h"
 #include "instruction.h"
 #include "util.h"
 #include <stdint.h>
@@ -170,13 +171,13 @@ struct seg_desc {
         // Note: Do NOT use the following struct. It is only here for explanation.
         // There is a possibility that fields.access could result in an unaligned read.
         // Use SEG_ACCESS, cpu_seg_get_base, and cpu_seg_get_limit
-        struct __attribute__((__packed__)) {
+        PACKED(struct {
             uint16_t limit_0_15;
             uint16_t base_0_15;
             uint8_t base_16_23;
             uint16_t access;
             uint8_t base_24_31;
-        } fields;
+        } fields;)
         uint32_t raw[2];
     };
 };
@@ -222,7 +223,7 @@ struct cpu {
         uint16_t xmm16[64];
         uint8_t xmm8[128];
         uint64_t xmm64[16];
-    } __attribute__((aligned(16)));
+    } ALIGNED(16);
     uint32_t mxcsr;
 
     uint32_t esp_mask;
@@ -365,7 +366,7 @@ struct cpu {
 #define TLB_ATTR_NON_GLOBAL 2
     // Interesting information on TLB
     uint8_t tlb_attrs[1 << 20];
-    void* tlb[1 << 20];
+    uint8_t* tlb[1 << 20];
 
     // Actual trace cache
     struct decoded_instruction trace_cache[TRACE_CACHE_SIZE];
@@ -373,14 +374,14 @@ struct cpu {
 };
 extern struct cpu cpu;
 
-#define MEM32(e) *(uint32_t*)(cpu.mem + e)
-#define MEM16(e) *(uint16_t*)(cpu.mem + e)
+#define MEM32(e) *(uint32_t*)((uint8_t *)cpu.mem + e)
+#define MEM16(e) *(uint16_t*)((uint8_t *)cpu.mem + e)
 #ifdef LIBCPU
 uint32_t cpulib_ptr_to_phys(void*);
 #define PTR_TO_PHYS(ptr) cpulib_ptr_to_phys(ptr)
 #else
 // Converts pointer to a physical address
-#define PTR_TO_PHYS(ptr) (uint32_t)(uintptr_t)((void*)ptr - cpu.mem)
+#define PTR_TO_PHYS(ptr) (uint32_t)(uintptr_t)((uint8_t *)ptr - (uint8_t *)cpu.mem)
 #endif
 
 // Based on the linear address, the TLB tag for this entry, and the shift for the current mode

@@ -43,7 +43,7 @@ void* qmalloc(int size, int align)
     align--;
     qmalloc_usage = (qmalloc_usage + align) & ~align;
 
-    void* ptr = qmalloc_usage + qmalloc_data;
+    void* ptr = qmalloc_usage + (uint8_t *)qmalloc_data;
     qmalloc_usage += size;
     if (qmalloc_usage >= qmalloc_size) {
         LOG("QMALLOC", "Creating additional slab\n");
@@ -72,14 +72,14 @@ struct aalloc_info {
 void* aalloc(int size, int align)
 {
     int adjusted = align - 1;
-    void* actual = calloc(1, sizeof(void*) + size + adjusted);
-    struct aalloc_info* ai = ((void*)((uintptr_t)(actual + sizeof(void*) + adjusted) & ~adjusted)) - sizeof(void*);
+    void *actual = calloc(1, sizeof(void *) + size + adjusted);
+    struct aalloc_info *ai = (uint8_t *)((void*)((uintptr_t)((uint8_t *)actual + sizeof(void*) + adjusted) & ~adjusted)) - sizeof(void *);
     ai->actual_ptr = actual;
-    return ((void*)ai) + sizeof(void*);
+    return ((uint8_t *)ai) + sizeof(void *);
 }
 void afree(void* ptr)
 {
-    struct aalloc_info* a = ptr - sizeof(void*);
+    struct aalloc_info* a = (uint8_t *)ptr - 1;
     free(a->actual_ptr);
 }
 
@@ -132,7 +132,11 @@ void util_debug(void)
 {
     display_release_mouse();
 #ifndef EMSCRIPTEN
+#ifdef _MSC_VER
+    __debugbreak();
+#else
     __asm__("int3");
+#endif
 #else
     printf("Breakpoint reached -- aborting\n");
     abort();

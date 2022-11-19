@@ -9,8 +9,11 @@
 
 #include "cpuapi.h"
 #include "devices.h"
-#include "io.h"
+#include "mmio.h"
 #include "pc.h"
+#ifdef _MSC_VER
+#include <intrin.h>
+#endif
 
 #define APIC_LOG(x, ...) LOG("APIC", x, ##__VA_ARGS__)
 #define APIC_FATAL(x, ...) FATAL("APIC", x, ##__VA_ARGS__)
@@ -132,7 +135,13 @@ static inline int highest_set_bit(uint32_t* ptr)
         if (!ptr[i])
             x -= 32;
         else {
+#ifdef _MSC_VER
+            unsigned long index;
+            _BitScanReverse(&index, ptr[i]);
+            return (31 - (31 - index)) + x;
+#else
             return (31 - __builtin_clz(ptr[i])) + x;
+#endif
         }
     }
     return -1; // No bits set
@@ -322,11 +331,32 @@ static uint32_t apic_read(uint32_t addr)
         return apic.destination_format;
     case 0x0F: // Spurious interrupt vector register
         return apic.spurious_interrupt_vector;
-    case 0x10 ... 0x17:
+    case 0x10:
+    case 0x11:
+    case 0x12:
+    case 0x13:
+    case 0x14:
+    case 0x15:
+    case 0x16:
+    case 0x17:
         return apic.isr[addr & 7];
-    case 0x18 ... 0x1F:
+    case 0x18:
+    case 0x19:
+    case 0x1A:
+    case 0x1B:
+    case 0x1C:
+    case 0x1D:
+    case 0x1E:
+    case 0x1F:
         return apic.tmr[addr & 7];
-    case 0x20 ... 0x27:
+    case 0x20:
+    case 0x21:
+    case 0x22:
+    case 0x23:
+    case 0x24:
+    case 0x25:
+    case 0x26:
+    case 0x27:
         return apic.irr[addr & 7];
     case 0x28: {
         // XXX -- we are supposed to clear it when we write
@@ -340,7 +370,8 @@ static uint32_t apic_read(uint32_t addr)
     case 0x36:
     case 0x37:
         return *get_lvt_ptr(addr);
-    case 0x30 ... 0x31:
+    case 0x30:
+    case 0x31:
         return apic.icr[addr & 1];
     case 0x38:
         return apic.timer_initial_count;
@@ -421,13 +452,34 @@ static void apic_write(uint32_t addr, uint32_t data)
                 apic.lvt[i] |= LVT_DISABLED;
         }
         break;
-    case 0x10 ... 0x17:
+    case 0x10:
+    case 0x11:
+    case 0x12:
+    case 0x13:
+    case 0x14:
+    case 0x15:
+    case 0x16:
+    case 0x17:
         apic.isr[addr & 7] = data;
         break;
-    case 0x18 ... 0x1F:
+    case 0x18:
+    case 0x19:
+    case 0x1A:
+    case 0x1B:
+    case 0x1C:
+    case 0x1D:
+    case 0x1E:
+    case 0x1F:
         apic.tmr[addr & 7] = data;
         break;
-    case 0x20 ... 0x27:
+    case 0x20:
+    case 0x21:
+    case 0x22:
+    case 0x23:
+    case 0x24:
+    case 0x25:
+    case 0x26:
+    case 0x27:
         apic.irr[addr & 7] = data;
         break;
     case 0x28: // error register

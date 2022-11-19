@@ -1,5 +1,7 @@
-#ifndef IO_H
-#define IO_H
+#ifndef MMIO_H
+#define MMIO_H
+
+// NOTE: don't call this io.h, because on Windows, it will conflict with the io.h standard header required to call the file io functions
 
 #include <stdint.h>
 typedef uint32_t (*io_read)(uint32_t port);

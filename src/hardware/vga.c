@@ -10,7 +10,7 @@
 #include "cpuapi.h"
 #include "devices.h"
 #include "display.h"
-#include "io.h"
+#include "mmio.h"
 #include "state.h"
 #include <string.h>
 
@@ -377,7 +377,9 @@ static
         case 0:
             vga.vbe_version = data;
             break;
-        case 1 ... 3:
+        case 1:
+        case 2:
+        case 3:
             if (vga.vbe_enable & VBE_DISPI_GETCAPS)
                 VGA_LOG("Ignoring write (%d): GETCAPS bit\n", port);
             else {
@@ -449,7 +451,8 @@ static
         case 7: // vbe virtual height
             vga.vbe_regs[7] = data;
             break;
-        case 8 ... 9:
+        case 8:
+        case 9:
             vga.vbe_regs[vga.vbe_index] = data;
             break;
         default:
@@ -471,7 +474,22 @@ static
             if (diffxor) {
                 vga.attr[index] = data;
                 switch (index) {
-                case 0 ... 15:
+                case 0x00:
+                case 0x01:
+                case 0x02:
+                case 0x03:
+                case 0x04:
+                case 0x05:
+                case 0x06:
+                case 0x07:
+                case 0x08:
+                case 0x09:
+                case 0x0A:
+                case 0x0B:
+                case 0x0C:
+                case 0x0D:
+                case 0x0E:
+                case 0x0F:
                     if (diffxor & 0x3F)
                         vga_change_attr_cache(index);
                     break;
@@ -846,7 +864,9 @@ static
         switch (vga.vbe_index) {
         case 0:
             return vga.vbe_version;
-        case 1 ... 3: // xres, yres, bpp
+        case 1:
+        case 2:
+        case 3: // xres, yres, bpp
             if (vga.vbe_enable & VBE_DISPI_GETCAPS)
                 return vbe_maximums[vga.vbe_index - 1];
             else
@@ -860,7 +880,8 @@ static
             return vga.vbe_regs[6];
         case 7:
             return vga.vbe_regs[7];
-        case 8 ... 9:
+        case 8:
+        case 9:
             return vga.vbe_regs[vga.vbe_index];
         case 10: // Get VBE RAM size in 64 KB banks
             return vga.vram_size >> 16;

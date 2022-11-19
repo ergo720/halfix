@@ -2,7 +2,7 @@
 #include "cpuapi.h"
 #include "devices.h"
 #include "display.h"
-#include "io.h"
+#include "mmio.h"
 #include "state.h"
 #include "util.h"
 

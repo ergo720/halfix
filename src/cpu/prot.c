@@ -29,7 +29,10 @@ void cpu_prot_set_dr(int id, uint32_t val)
 {
     // Setting the debug registers does nothing.
     switch (id) {
-    case 0 ... 3:
+    case 0:
+    case 1:
+    case 2:
+    case 3:
         cpu.dr[id] = val;
         cpu_mmu_tlb_invalidate(val);
         break;

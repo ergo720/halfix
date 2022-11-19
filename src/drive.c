@@ -12,7 +12,17 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#ifdef _MSC_VER
+#include <BaseTsd.h>
+#include <io.h>
+typedef SSIZE_T ssize_t;
+#if !defined(S_ISDIR)
+// MSVC doesn't define S_ISDIR in its stat.h header
+#define S_ISDIR(mode) (((mode) & _S_IFMT) == (_S_IFDIR))
+#endif
+#else
 #include <unistd.h>
+#endif
 #include <zlib.h>
 #else
 #include <emscripten.h>
@@ -116,7 +126,7 @@ static void drive_get_path(char* dest, char* pathbase, uint32_t x)
 {
     char temp[16];
     sprintf(temp, "blk%08x.bin", x);
-    join_path(dest, strlen(pathbase), pathbase, temp);
+    join_path(dest, (int)strlen(pathbase), pathbase, temp);
 }
 
 // ============================================================================
@@ -272,7 +282,7 @@ static int drive_internal_read_check(struct drive_internal_info* this, void* buf
 #endif
         }
 
-        buffer += len;
+        (uint8_t *)buffer += len;
         currentFilePosition += len;
     }
     return retval;
@@ -408,7 +418,7 @@ static int drive_internal_write_check(struct drive_internal_info* this, void* bu
 #endif
         }
 
-        buffer += len;
+        (uint8_t *)buffer += len;
         currentFilePosition += len;
     }
     return retval;
@@ -844,7 +854,7 @@ static int drive_simple_write(void* this, void* cb_ptr, void* buffer, uint32_t s
             if (write(info->fd, buffer, 512) != 512)
                 DRIVE_FATAL("Unable to write 512 bytes to image file\n");
         }
-        buffer += 512;
+        (uint8_t *)buffer += 512;
         offset += 512;
     }
     return DRIVE_RESULT_SYNC;
@@ -868,7 +878,7 @@ static int drive_simple_read(void* this, void* cb_ptr, void* buffer, uint32_t si
             if (read(info->fd, buffer, 512) != 512)
                 DRIVE_FATAL("Unable to read 512 bytes from image file\n");
         }
-        buffer += 512;
+        (uint8_t *)buffer += 512;
         offset += 512;
     }
     return DRIVE_RESULT_SYNC;

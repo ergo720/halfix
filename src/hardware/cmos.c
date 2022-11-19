@@ -227,7 +227,8 @@ static inline void cmos_ram_write(uint8_t data)
         cmos.ram[0x0B] = data;
         cmos_update_timer();
         break;
-    case 0x0C ... 0x0D:
+    case 0x0C:
+    case 0x0D:
         break;
     default:
         CMOS_FATAL("?? writeb ??");

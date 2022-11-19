@@ -7,7 +7,7 @@
 #ifdef LIBCPU
 void* get_phys_ram_ptr(uint32_t addr, int write);
 #else
-#define get_phys_ram_ptr(a, b) (cpu.mem + (a))
+#define get_phys_ram_ptr(a, b) ((uint8_t *)cpu.mem + (a))
 #endif
 
 // ============================================================================
@@ -209,16 +209,37 @@ done:
                     max_bytes -= 5;
                     break;
                 case 5:
-                case 16 ... 19:
-                case 21 ... 23:
+                case 16:
+                case 17:
+                case 18:
+                case 19:
+                case 21:
+                case 22:
+                case 23:
                     max_bytes -= 4;
                     break;
-                case 0 ... 3:
-                case 6 ... 7:
-                case 24 ... 31: // mod=3
+                case 0:
+                case 1:
+                case 2:
+                case 3:
+                case 6:
+                case 7:
+                case 24:
+                case 25:
+                case 26:
+                case 27:
+                case 28:
+                case 29:
+                case 30:
+                case 31: // mod=3
                     break; // no disp
-                case 8 ... 0x0B:
-                case 0x0D ... 0x0F:
+                case 0x08:
+                case 0x09:
+                case 0x0A:
+                case 0x0B:
+                case 0x0D:
+                case 0x0E:
+                case 0x0F:
                     max_bytes--;
                     break;
                 }
@@ -318,7 +339,12 @@ static int parse_modrm(struct decoded_instruction* i, uint8_t modrm, int is8)
     }
     if (addr16) {
         switch (new_modrm) {
-        case 0 ... 5:
+        case 0:
+        case 1:
+        case 2:
+        case 3:
+        case 4:
+        case 5:
         case 7: // [bx+si], [bx], etc.
             I_SET_BASE(flags, addr16_lut[rm]);
             I_SET_INDEX(flags, addr16_lut[rm | 8]);
@@ -333,7 +359,14 @@ static int parse_modrm(struct decoded_instruction* i, uint8_t modrm, int is8)
             I_SET_SEG_BASE(flags, seg_prefix[0]);
             i->disp32 = rw();
             break;
-        case 8 ... 15: // [bx+si+disp8s], [bx+disp8s], etc.
+        case 8:
+        case 9:
+        case 10:
+        case 11:
+        case 12:
+        case 13:
+        case 14:
+        case 15: // [bx+si+disp8s], [bx+disp8s], etc.
             I_SET_BASE(flags, addr16_lut2[rm]);
             I_SET_INDEX(flags, addr16_lut2[rm | 8]);
             I_SET_SCALE(flags, 0);
@@ -341,14 +374,28 @@ static int parse_modrm(struct decoded_instruction* i, uint8_t modrm, int is8)
             //printf("Translated (modrm=%02x prefix=%d idx=%d rm=%d a=%d b=%d)\n", modrm, seg_prefix[addr16_lut2[rm | 16]], addr16_lut2[rm | 16], rm, addr16_lut2[0], addr16_lut2[1]);
             i->disp32 = rbs();
             break;
-        case 16 ... 23: // [bx+si+disp16], [bx+disp16], etc.
+        case 16:
+        case 17:
+        case 18:
+        case 19:
+        case 20:
+        case 21:
+        case 22:
+        case 23: // [bx+si+disp16], [bx+disp16], etc.
             I_SET_BASE(flags, addr16_lut2[rm]);
             I_SET_INDEX(flags, addr16_lut2[rm | 8]);
             I_SET_SCALE(flags, 0);
             I_SET_SEG_BASE(flags, seg_prefix[addr16_lut2[rm | 16]]);
             i->disp32 = rw();
             break;
-        case 24 ... 31: // mod=3
+        case 24:
+        case 25:
+        case 26:
+        case 27:
+        case 28:
+        case 29:
+        case 30:
+        case 31: // mod=3
             if (is8 & 4) {
                 I_SET_RM(flags, modrm & 7);
             } else if (is8 & 1) {
@@ -361,8 +408,12 @@ static int parse_modrm(struct decoded_instruction* i, uint8_t modrm, int is8)
     } else {
         int sib, index, base;
         switch (new_modrm) {
-        case 0 ... 3:
-        case 6 ... 7: // [eax], [ebx]
+        case 0:
+        case 1:
+        case 2:
+        case 3:
+        case 6:
+        case 7: // [eax], [ebx]
             I_SET_BASE(flags, rm);
             I_SET_INDEX(flags, EZR);
             I_SET_SCALE(flags, 0);
@@ -396,8 +447,13 @@ static int parse_modrm(struct decoded_instruction* i, uint8_t modrm, int is8)
             I_SET_SEG_BASE(flags, seg_prefix[0]);
             i->disp32 = rd();
             break;
-        case 0x08 ... 0x0B:
-        case 0x0D ... 0x0F: // [eax+disp8s], [ebx+disp8s]
+        case 0x08:
+        case 0x09:
+        case 0x0A:
+        case 0x0B:
+        case 0x0D:
+        case 0x0E:
+        case 0x0F: // [eax+disp8s], [ebx+disp8s]
             rm = modrm & 7;
             I_SET_BASE(flags, rm);
             I_SET_INDEX(flags, EZR);
@@ -418,8 +474,13 @@ static int parse_modrm(struct decoded_instruction* i, uint8_t modrm, int is8)
             I_SET_SEG_BASE(flags, seg_prefix[addr32_lut2[base]]);
             i->disp32 = rbs();
             break;
-        case 0x10 ... 0x13:
-        case 0x15 ... 0x17: // [eax+disp32], [ecx+disp32]
+        case 0x10:
+        case 0x11:
+        case 0x12:
+        case 0x13:
+        case 0x15:
+        case 0x16:
+        case 0x17: // [eax+disp32], [ecx+disp32]
             rm = modrm & 7;
             I_SET_BASE(flags, rm);
             I_SET_INDEX(flags, EZR);
@@ -440,7 +501,14 @@ static int parse_modrm(struct decoded_instruction* i, uint8_t modrm, int is8)
             I_SET_SEG_BASE(flags, seg_prefix[addr32_lut2[base]]);
             i->disp32 = rd();
             break;
-        case 24 ... 31: // reg3
+        case 24:
+        case 25:
+        case 26:
+        case 27:
+        case 28:
+        case 29:
+        case 30:
+        case 31: // reg3
             if (is8 & 4) {
                 I_SET_RM(flags, modrm & 7);
             } else if (is8 & 1) {

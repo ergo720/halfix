@@ -7,7 +7,7 @@
 
 #include "devices.h"
 #include "drive.h"
-#include "io.h"
+#include "mmio.h"
 #include "pc.h"
 #include "util.h"
 #include <stdint.h>

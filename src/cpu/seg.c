@@ -254,8 +254,16 @@ int cpu_load_seg_value_mov(int seg, uint16_t val)
                 case 0x1F: // Readable code segment
                     // No checks required?
                     break;
-                case 0x10 ... 0x17: // Data segment
-                case 0x18 ... 0x19: // Conforming code segment (cases 0x1A and 0x1B are handled above)
+                case 0x10:
+                case 0x11:
+                case 0x12:
+                case 0x13:
+                case 0x14:
+                case 0x15:
+                case 0x16:
+                case 0x17: // Data segment
+                case 0x18:
+                case 0x19: // Conforming code segment (cases 0x1A and 0x1B are handled above)
                     dpl = ACCESS_DPL(access);
                     rpl = SELECTOR_RPL(val);
                     if (dpl < cpu.cpl || dpl < rpl)

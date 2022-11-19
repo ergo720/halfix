@@ -4,7 +4,7 @@
 // https://www.intel.com/assets/pdf/specupdate/297738.pdf
 
 #include "devices.h"
-#include "io.h"
+#include "mmio.h"
 
 #define ACPI_LOG(x, ...) LOG("ACPI", x, ##__VA_ARGS__)
 #define ACPI_FATAL(x, ...) FATAL("ACPI", x, ##__VA_ARGS__)
@@ -128,7 +128,8 @@ static uint32_t acpi_sm_read(uint32_t addr)
         case 4:
             // TODO: address
             return 0;
-        case 5 ... 6:
+        case 5:
+        case 6:
             //return acpi.smbus_data[~addr & 1];
             // TODO: data
             return 0;
@@ -147,7 +148,8 @@ static void acpi_sm_write(uint32_t addr, uint32_t data)
             break;
         case 4:
             break;
-        case 5 ... 6:
+        case 5:
+        case 6:
             break;
         default:
             ACPI_FATAL("TODO: system management read: %04x data %04x\n", addr, data);
@@ -188,28 +190,87 @@ static void acpi_remap_smba(uint32_t io)
 static int acpi_pci_write(uint8_t* ptr, uint8_t addr, uint8_t data)
 {
     switch (addr) {
-    case 0 ... 3: // Vendor ID and stuff
-    case 4 ... 5:
+    case 0:
+    case 1:
+    case 2:
+    case 3: // Vendor ID and stuff
+    case 4:
+    case 5:
         ptr[addr] = data;
         acpi.smiose = data & 1; // XXX: Correct? 
         return 0;
-    case 6 ... 7: // PCI Device status register, most of the bits are hardwired. 
+    case 6:
+    case 7: // PCI Device status register, most of the bits are hardwired.
         return 0;
-    case 8 ... 0x3B:
+    case 0x08:
+    case 0x09:
+    case 0x10:
+    case 0x11:
+    case 0x12:
+    case 0x13:
+    case 0x14:
+    case 0x15:
+    case 0x16:
+    case 0x17:
+    case 0x18:
+    case 0x19:
+    case 0x1A:
+    case 0x1B:
+    case 0x1C:
+    case 0x1D:
+    case 0x1E:
+    case 0x1F:
+    case 0x20:
+    case 0x21:
+    case 0x22:
+    case 0x23:
+    case 0x24:
+    case 0x25:
+    case 0x26:
+    case 0x27:
+    case 0x28:
+    case 0x29:
+    case 0x2A:
+    case 0x2B:
+    case 0x2C:
+    case 0x2D:
+    case 0x2E:
+    case 0x2F:
+    case 0x30:
+    case 0x31:
+    case 0x32:
+    case 0x33:
+    case 0x34:
+    case 0x35:
+    case 0x36:
+    case 0x37:
+    case 0x38:
+    case 0x39:
+    case 0x3A:
+    case 0x3B:
         return 1; // Read only
     case 0x3C: // "Interrupt Line. The value in this register has no affect on PIIX4 hardware operations."
         return 0;
-    case 0x40 ... 0x43: // Power Management Base Address
+    case 0x40:
+    case 0x41:
+    case 0x42:
+    case 0x43: // Power Management Base Address
         ptr[addr] = data | (addr == 0x40); // Bit 0 of byte 0x40 must be 1
         if (addr == 0x43)
             acpi_remap_pmba(read32le(ptr, 0x40));
         return 0;
-    case 0x58 ... 0x5B: // Device Activity B
+    case 0x58:
+    case 0x59:
+    case 0x5A:
+    case 0x5B: // Device Activity B
         return 0; // Don't know what to do here.
     case 0x80: // Power management base address
         acpi.pmiose = data & 1;
         return 0;
-    case 0x90 ... 0x93: // System Management Base Address
+    case 0x90:
+    case 0x91:
+    case 0x92:
+    case 0x93: // System Management Base Address
         ptr[addr] = data | (addr == 0x90); // Bit 0 of byte 0x90 must be 1
         if (addr == 0x93)
             acpi_remap_smba(read32le(ptr, 0x90));

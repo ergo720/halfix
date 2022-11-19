@@ -2,7 +2,7 @@
 #define DEVICES_H
 
 // Master header file for all devices
-#include "io.h"
+#include "mmio.h"
 #include "pc.h"
 #include "util.h"
 

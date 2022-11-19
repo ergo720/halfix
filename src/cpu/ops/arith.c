@@ -404,7 +404,10 @@ int cpu_muldiv8(int op, uint32_t src)
     uint32_t result = 0 /* annoying gcc workaround */, result_mod;
     int8_t low, high;
     switch (op & 7) {
-    case 0 ... 3:
+    case 0:
+    case 1:
+    case 2:
+    case 3:
         ABORT();
         break;
     case 4: // mul
@@ -452,7 +455,10 @@ int cpu_muldiv16(int op, uint32_t src)
     uint32_t result = 0 /* annoying gcc workaround */, result_mod, original;
     int16_t low, high;
     switch (op & 7) {
-    case 0 ... 3:
+    case 0:
+    case 1:
+    case 2:
+    case 3:
         ABORT();
         break;
     case 4: // mul
@@ -503,7 +509,10 @@ int cpu_muldiv32(int op, uint32_t src)
     uint64_t result = 0 /* annoying gcc workaround */, result_mod, original;
     int32_t low, high;
     switch (op & 7) {
-    case 0 ... 3:
+    case 0:
+    case 1:
+    case 2:
+    case 3:
         ABORT();
         break;
     case 4: // mul

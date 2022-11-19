@@ -1,5 +1,5 @@
 #include "cpu/cpu.h"
-#include "io.h"
+#include "mmio.h"
 
 int cpu_access_read8(uint32_t addr, uint32_t tag, int shift)
 {

@@ -31,7 +31,7 @@ set(HEADERS
  "${HALFIX_ROOT_DIR}/include/devices.h"
  "${HALFIX_ROOT_DIR}/include/display.h"
  "${HALFIX_ROOT_DIR}/include/drive.h"
- "${HALFIX_ROOT_DIR}/include/io.h"
+ "${HALFIX_ROOT_DIR}/include/mmio.h"
  "${HALFIX_ROOT_DIR}/include/net.h"
  "${HALFIX_ROOT_DIR}/include/pc.h"
  "${HALFIX_ROOT_DIR}/include/platform.h"

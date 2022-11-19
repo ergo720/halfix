@@ -7,7 +7,7 @@
 
 #include "cpuapi.h"
 #include "devices.h"
-#include "io.h"
+#include "mmio.h"
 #include "state.h"
 #include "util.h"
 #include <stdint.h>
@@ -139,10 +139,32 @@ static uint32_t dma_io_readb(uint32_t port)
     case 0x0F:
     case 0xDE: // Read all mask register bits
         return dma.mask[offset];
-    case 0x80 ... 0x8F: {
+    case 0x80:
+    case 0x81:
+    case 0x82:
+    case 0x83:
+    case 0x84:
+    case 0x85:
+    case 0x86:
+    case 0x87:
+    case 0x88:
+    case 0x89:
+    case 0x8A:
+    case 0x8B:
+    case 0x8C:
+    case 0x8D:
+    case 0x8E:
+    case 0x8F: {
         int id = page_register_offsets[port & 15];
         switch (id) {
-        case 0 ... 7:
+        case 0:
+        case 1:
+        case 2:
+        case 3:
+        case 4:
+        case 5:
+        case 6:
+        case 7:
             return dma.addr_high[id] >> 16 & 255;
         default:
             if (port != 0x80)
@@ -150,10 +172,32 @@ static uint32_t dma_io_readb(uint32_t port)
             return -1;
         }
     }
-    case 0x480 ... 0x48F: {
+    case 0x480:
+    case 0x481:
+    case 0x482:
+    case 0x483:
+    case 0x484:
+    case 0x485:
+    case 0x486:
+    case 0x487:
+    case 0x488:
+    case 0x489:
+    case 0x48A:
+    case 0x48B:
+    case 0x48C:
+    case 0x48D:
+    case 0x48E:
+    case 0x48F: {
         int id = page_register_offsets[port & 15];
         switch (id) {
-        case 0 ... 7:
+        case 0:
+        case 1:
+        case 2:
+        case 3:
+        case 4:
+        case 5:
+        case 6:
+        case 7:
             return dma.addr_high[id] >> 24 & 255;
         default:
             DMA_LOG("Unknown DMA read pagehi: %02x\n", port);
@@ -248,10 +292,32 @@ static void dma_io_writeb(uint32_t port, uint32_t data)
         dma.mask[offset] = data;
         dma_run_transfers();
         break;
-    case 0x80 ... 0x8F: {
+    case 0x80:
+    case 0x81:
+    case 0x82:
+    case 0x83:
+    case 0x84:
+    case 0x85:
+    case 0x86:
+    case 0x87:
+    case 0x88:
+    case 0x89:
+    case 0x8A:
+    case 0x8B:
+    case 0x8C:
+    case 0x8D:
+    case 0x8E:
+    case 0x8F: {
         int id = page_register_offsets[port & 15];
         switch (id) {
-        case 0 ... 7:
+        case 0:
+        case 1:
+        case 2:
+        case 3:
+        case 4:
+        case 5:
+        case 6:
+        case 7:
             dma.addr_high[id] &= ~0x00FF0000;
             dma.addr_high[id] |= data << 16;
             break;
@@ -261,10 +327,32 @@ static void dma_io_writeb(uint32_t port, uint32_t data)
         }
         break;
     }
-    case 0x480 ... 0x48F: {
+    case 0x480:
+    case 0x481:
+    case 0x482:
+    case 0x483:
+    case 0x484:
+    case 0x485:
+    case 0x486:
+    case 0x487:
+    case 0x488:
+    case 0x489:
+    case 0x48A:
+    case 0x48B:
+    case 0x48C:
+    case 0x48D:
+    case 0x48E:
+    case 0x48F: {
         int id = page_register_offsets[port & 15];
         switch (id) {
-        case 0 ... 7:
+        case 0:
+        case 1:
+        case 2:
+        case 3:
+        case 4:
+        case 5:
+        case 6:
+        case 7:
             dma.addr_high[id] &= ~0xFF000000;
             dma.addr_high[id] |= data << 24;
             break;
@@ -339,11 +427,11 @@ static void dma_run_transfers(void)
                         cpu_write_mem(current_addr, buf, size);
                     else {
                         if (is16)
-                            *(uint16_t*)buf = *(uint16_t*)(mem + current_addr);
+                            *(uint16_t*)buf = *(uint16_t*)((uint8_t *)mem + current_addr);
                         else
-                            *(uint8_t*)buf = *(uint8_t*)(mem + current_addr);
+                            *(uint8_t*)buf = *(uint8_t*)((uint8_t *)mem + current_addr);
                     }
-                    buf += size;
+                    (uint8_t *)buf += size;
                     addr += incdec;
                     ccount--;
                 }

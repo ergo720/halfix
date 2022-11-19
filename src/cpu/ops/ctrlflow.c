@@ -6,7 +6,6 @@
 #include "cpu/cpu.h"
 #include "cpu/instruction.h"
 #include "display.h"
-#include "platform.h"
 
 #define EXCEPTION_HANDLER return 1
 
@@ -338,14 +337,20 @@ static int do_task_switch(int sel, struct seg_desc* info, int type, int eip)
                 if (cpu.cpl != SELECTOR_RPL(sel) && cpu.cpl != ACCESS_DPL(seg_access))
                     EXCEPTION_TS(sel_offs);
                 break;
-            case 0x18 ... 0x1B:
+            case 0x18:
+            case 0x19:
+            case 0x1A:
+            case 0x1B:
                 if (i != CS)
                     goto error;
                 // Non-Conforming: DPL=CPL or else #TS
                 if (ACCESS_DPL(seg_access) != SELECTOR_RPL(sel))
                     EXCEPTION_TS(sel_offs);
                 break;
-            case 0x1C ... 0x1F:
+            case 0x1C:
+            case 0x1D:
+            case 0x1E:
+            case 0x1F:
                 if (i != CS)
                     goto error;
                 // Non-Conforming: DPL<=CPL or else #TS
@@ -374,7 +379,14 @@ static int do_task_switch(int sel, struct seg_desc* info, int type, int eip)
             if (!(seg_access & ACCESS_P))
                 EXCEPTION_TS(sel_offs);
             switch (ACCESS_TYPE(seg_access)) {
-            case 0x10 ... 0x17: // Data Segment
+            case 0x10:
+            case 0x11:
+            case 0x12:
+            case 0x13:
+            case 0x14:
+            case 0x15:
+            case 0x16:
+            case 0x17: // Data Segment
             case 0x1A:
             case 0x1B: { // Readable Code Segment, non-conforming
                 // RPL and CPL must be less than or equal to DPL
@@ -558,7 +570,10 @@ int cpu_interrupt(int vector, int error_code, int type, int eip_to_push)
 
             int changed_privilege_level = 0;
             switch (type) {
-            case 0x18 ... 0x1B: // Non-conforming
+            case 0x18:
+            case 0x19:
+            case 0x1A:
+            case 0x1B: // Non-conforming
                 if (dpl == cpu.cpl)
                     goto conforming; // whoopsie
 
@@ -685,7 +700,10 @@ int cpu_interrupt(int vector, int error_code, int type, int eip_to_push)
                     push16(old_esp);
                 }
                 break;
-            case 0x1C ... 0x1F: // Conforming code segment
+            case 0x1C:
+            case 0x1D:
+            case 0x1E:
+            case 0x1F: // Conforming code segment
             conforming:
                 // DPL must equal CPL
                 if (dpl != cpu.cpl && cpu.eflags & EFLAGS_VM)
@@ -750,8 +768,8 @@ int cpu_interrupt(int vector, int error_code, int type, int eip_to_push)
 
         // Now read CS/EIP from IDT
         vector <<= 2;
-        uint16_t cs = *(uint16_t *)(cpu.mem + vector + 2),
-                 eip = *(uint16_t *)(cpu.mem + vector);
+        uint16_t cs = *(uint16_t *)((uint8_t *)cpu.mem + vector + 2),
+                 eip = *(uint16_t *)((uint8_t *)cpu.mem + vector);
         cpu_load_csip_real(cs, eip);
         cpu.eflags &= ~(EFLAGS_IF | EFLAGS_TF | EFLAGS_AC);
         return 0;
@@ -820,7 +838,10 @@ int jmpf(uint32_t eip, uint32_t cs, uint32_t eip_after)
         type = ACCESS_TYPE(access);
         //printf("%08x %d %x %08x%08x\n", cpu.phys_eip, cpu.state_hash, type, info.raw[1], info.raw[0]);
         switch (type) {
-        case 0x18 ... 0x1B: // Non-conforming code segment
+        case 0x18:
+        case 0x19:
+        case 0x1A:
+        case 0x1B: // Non-conforming code segment
             // RPL <= CPL and DPL == CPL, or else #GP
             if (rpl > cpu.cpl || dpl != cpu.cpl)
                 EXCEPTION_GP(offset);
@@ -829,7 +850,10 @@ int jmpf(uint32_t eip, uint32_t cs, uint32_t eip_after)
             if (cpu_load_csip_protected(offset | cpu.cpl, &info, eip))
                 return 1;
             break;
-        case 0x1C ... 0x1F: // Conforming code segment
+        case 0x1C:
+        case 0x1D:
+        case 0x1E:
+        case 0x1F: // Conforming code segment
             // DPL <= CPL or else #GP
             if (dpl > cpu.cpl)
                 EXCEPTION_GP(offset);
@@ -859,12 +883,18 @@ int jmpf(uint32_t eip, uint32_t cs, uint32_t eip_after)
             access = DESC_ACCESS(&gate_info);
             dpl = ACCESS_DPL(access);
             switch (ACCESS_TYPE(access)) {
-            case 0x1C ... 0x1F: // Conforming code segment
+            case 0x1C:
+            case 0x1D:
+            case 0x1E:
+            case 0x1F: // Conforming code segment
                 // DPL <= CPL or else #GP
                 if (dpl > cpu.cpl)
                     EXCEPTION_GP(gate_cs_offset);
                 break;
-            case 0x18 ... 0x1B: // Non-conforming code segment
+            case 0x18:
+            case 0x19:
+            case 0x1A:
+            case 0x1B: // Non-conforming code segment
                 // DPL == CPL or else #GP
                 if (dpl != cpu.cpl)
                     EXCEPTION_GP(gate_cs_offset);
@@ -959,12 +989,18 @@ int callf(uint32_t eip, uint32_t cs, uint32_t oldeip, int is32)
         cs_rpl = SELECTOR_RPL(cs);
 
         switch (cs_type) {
-        case 0x1C ... 0x1F: // Conforming code segment
+        case 0x1C:
+        case 0x1D:
+        case 0x1E:
+        case 0x1F:  // Conforming code segment
             // CS.dpl must be <= cpl
             if (cs_dpl > cpu.cpl)
                 EXCEPTION_GP(cs_offset);
             break;
-        case 0x18 ... 0x1B: // Conforming code segment
+        case 0x18:
+        case 0x19:
+        case 0x1A:
+        case 0x1B: // Conforming code segment
             // RPL must be <= CPL and CPL must be equal to dpl
             if (cs_rpl > cpu.cpl || cs_dpl != cpu.cpl)
                 EXCEPTION_GP(cs_offset);
@@ -993,7 +1029,10 @@ int callf(uint32_t eip, uint32_t cs, uint32_t oldeip, int is32)
             gate_type = ACCESS_TYPE(gate_access);
             dpldiff = gate_dpl - cpu.cpl; // Will be < 0 if DPL<CPL, =0 if DPL=CPL, or >0 if DPL>CPL
             switch (gate_type) {
-            case 0x18 ... 0x1B: // Non-conforming code segment
+            case 0x18:
+            case 0x19:
+            case 0x1A:
+            case 0x1B: // Non-conforming code segment
                 if (dpldiff < 0) {
                     // Call gate to more privilege
                     int ss, esp, ss_offset, ss_access, ss_type, ss_base, ss_mask;
@@ -1084,7 +1123,10 @@ int callf(uint32_t eip, uint32_t cs, uint32_t oldeip, int is32)
                 else // Work around GCC warning about fallthrough cases
                     goto __workaround_gcc;
             // Otherwise, DPL == CPL -- fallthrough to conforming code segment
-            case 0x1C ... 0x1F: // Conforming code segment
+            case 0x1C:
+            case 0x1D:
+            case 0x1E:
+            case 0x1F:  // Conforming code segment
 __workaround_gcc:
                 init_fast_push(cpu.reg32[ESP], cpu.seg_base[SS], cpu.esp_mask, cpu.tlb_shift_write, is32);
                 if (cs_type == CALL_GATE_386) {
@@ -1166,8 +1208,18 @@ static void iret_handle_seg(int x)
         invalid = 1;
     else if (cpu.cpl > ACCESS_DPL(access)) {
         switch (type) {
-        case 0x1C ... 0x1F: // Conforming code
-        case 0x10 ... 0x17: // Data
+        case 0x1C:
+        case 0x1D:
+        case 0x1E:
+        case 0x1F:  // Conforming code
+        case 0x10:
+        case 0x11:
+        case 0x12:
+        case 0x13:
+        case 0x14:
+        case 0x15:
+        case 0x16:
+        case 0x17: // Data
             invalid = 1;
             break;
         }
@@ -1319,11 +1371,17 @@ int iret(uint32_t tss_eip, int is32)
                     EXCEPTION_GP(cs_offset);
 
                 switch (ACCESS_TYPE(access)) {
-                case 0x18 ... 0x1B: // Non-conforming
+                case 0x18:
+                case 0x19:
+                case 0x1A:
+                case 0x1B: // Non-conforming
                     if (dpl != rpl)
                         EXCEPTION_GP(cs_offset);
                     break;
-                case 0x1C ... 0x1F: // Conforming
+                case 0x1C:
+                case 0x1D:
+                case 0x1E:
+                case 0x1F:  // Conforming
                     if (dpl > rpl)
                         EXCEPTION_GP(cs_offset);
                     break;
@@ -1489,11 +1547,17 @@ int retf(int adjust, int is32)
             EXCEPTION_GP(cs_offset);
 
         switch (ACCESS_TYPE(access)) {
-        case 0x18 ... 0x1B: // Non-comforning
+        case 0x18:
+        case 0x19:
+        case 0x1A:
+        case 0x1B: // Non-comforning
             if (dpl != rpl)
                 EXCEPTION_GP(cs_offset);
             break;
-        case 0x1C ... 0x1F: // Non-comforning
+        case 0x1C:
+        case 0x1D:
+        case 0x1E:
+        case 0x1F:  // Non-comforning
             if (dpl > rpl)
                 EXCEPTION_GP(cs_offset);
             break;

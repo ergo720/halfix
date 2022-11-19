@@ -623,7 +623,11 @@ OPTYPE op_into(struct decoded_instruction* i)
 {
 #if 1
 #ifndef EMSCRIPTEN
+#ifdef _MSC_VER
+    __debugbreak();
+#else
     __asm__("int3");
+#endif
     NEXT2(i->flags);
 #endif
 #endif
