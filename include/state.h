@@ -40,7 +40,7 @@ struct bjson_string {
     char* data;
 };
 
-void state_file(int size, char* name, void* ptr);
+void state_file(int size, const char* name, void* ptr);
 void state_array(int size, int ellen, char* name, void* ptr);
 void state_integer(int size, char* name, void* ptr);
 int state_is_reading(void);
@@ -52,9 +52,9 @@ void state_read(int fd, void* information, int bytelen);
 void* state_readfile(char* data);
 void state_freefile(void* information);
 
-struct bjson_object* state_obj(char* name, int keyvalues);
-void state_field(struct bjson_object*, int length, char* name, void*);
-void state_string(struct bjson_object* cur, char* name, char** val);
+struct bjson_object* state_obj(const char* name, int keyvalues);
+void state_field(struct bjson_object*, int length, const char* name, void*);
+void state_string(struct bjson_object* cur, const char* name, char** val);
 char* state_get_path_base(void);
 
 #define FIELD(y) state_field(obj, sizeof(y), #y, &y)

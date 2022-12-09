@@ -394,7 +394,7 @@ void display_init(void)
     AppendMenu(file, MF_STRING, MENU_EXIT, "&Exit");
     AppendMenu(file, MF_STRING, MENU_SAVE_STATE, "&Save State");
 
-    AppendMenu(bar, MF_POPUP, file, "&File");
+    AppendMenu(bar, MF_POPUP, (UINT_PTR)file, "&File");
     SetMenu(hWnd, bar);
 
     dc_dest = GetDC(hWnd);

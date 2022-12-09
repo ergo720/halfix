@@ -7,9 +7,13 @@
 //  - More sophisticated interrupt delivery
 //  - Timer (currently, XP doesn't use this so we don't support it either)
 
+#ifndef LIB86CPU
 #include "cpuapi.h"
+#else
+#include "lib86cpu/cpu.h"
+#endif
 #include "devices.h"
-#include "mmio.h"
+#include "io2.h"
 #include "pc.h"
 #ifdef _MSC_VER
 #include <intrin.h>
@@ -181,8 +185,12 @@ static void apic_send_highest_priority_interrupt(void)
             // At this point, we simply need to kick the CPU out from its loop and wait for it to acknowledge the interrupt.
             // The next function that will be called is apic_get_interrupt()
             apic.intr_line_state = 1;
+#ifdef LIB86CPU
+            cpu_raise_hw_int(g_cpu);
+#else
             cpu_raise_intr_line();
             cpu_request_fast_return(EXIT_STATUS_IRQ);
+#endif
         } else // Task priority is too high -- refrain from sending interrupt
             return;
     } else // Nothing changes -- wait for completion
@@ -203,7 +211,9 @@ int apic_get_interrupt(void)
     set_bit(apic.isr, highest_irr, 1);
 
     apic.intr_line_state = 0;
+#ifndef LIB86CPU
     cpu_lower_intr_line();
+#endif
 
     APIC_LOG("Sending interrupt %x\n", highest_irr);
 
@@ -304,7 +314,11 @@ static int apic_get_clock_divide(void)
 
 static uint32_t apic_get_count(void)
 {
+#ifdef LIB86CPU
+    return apic.timer_initial_count - ((uint32_t)(get_now() - apic.timer_reload_time) >> apic_get_clock_divide()) % apic.timer_initial_count;
+#else
     return apic.timer_initial_count - ((uint32_t)(cpu_get_cycles() - apic.timer_reload_time) >> apic_get_clock_divide()) % apic.timer_initial_count;
+#endif
 }
 // In terms of CPU ticks, independent of ticks_per_second because APIC timer isn't tied to realtime
 static itick_t apic_get_period(void)
@@ -312,7 +326,11 @@ static itick_t apic_get_period(void)
     return (itick_t)apic.timer_initial_count << apic_get_clock_divide();
 }
 
+#ifndef LIB86CPU
 static uint32_t apic_read(uint32_t addr)
+#else
+uint32_t apic_read(uint32_t addr, void *opaque)
+#endif
 {
     addr -= apic.base;
     addr >>= 4;
@@ -384,7 +402,11 @@ static uint32_t apic_read(uint32_t addr)
         APIC_FATAL("TODO: APIC read %08x\n", addr);
     }
 }
+#ifndef LIB86CPU
 static void apic_write(uint32_t addr, uint32_t data)
+#else
+void apic_write(uint32_t addr, const uint32_t data, void *opaque)
+#endif
 {
     addr -= apic.base;
     addr >>= 4; // Must be 128-bit aligned
@@ -539,14 +561,22 @@ static void apic_write(uint32_t addr, uint32_t data)
         apic.timer_initial_count = data;
         apic.timer_reload_time = get_now();
         apic.timer_next = apic.timer_reload_time + apic_get_period();
+#ifdef LIB86CPU
+        next_deadline = 0;
+#else
         cpu_cancel_execution_cycle(EXIT_STATUS_NORMAL);
+#endif
         break;
     case 0x39:
         break;
     case 0x3E:
         apic.timer_divide = data;
         APIC_LOG("Timer divide=%d\n", 1 << apic_get_clock_divide());
+#ifdef LIB86CPU
+        next_deadline = 0;
+#else
         cpu_cancel_execution_cycle(EXIT_STATUS_NORMAL);
+#endif
         break;
     default:
         APIC_FATAL("TODO: APIC write %08x data=%08x\n", addr, data);
@@ -557,19 +587,35 @@ static void apic_write(uint32_t addr, uint32_t data)
 // However, since accesses that are less than 32-bits in size are undefined, we can do whatever we want here.
 // We should not be doing this, but this is the simplest way to do things without adding a ton of logic in apic.c
 
+#ifndef LIB86CPU
 static uint32_t apic_readb(uint32_t addr)
+#else
+uint8_t apic_readb(uint32_t addr, void *opaque)
+#endif
 {
     //APIC_LOG("8-bit read from %08x\n", addr);
+#ifdef LIB86CPU
+    return apic_read(addr & ~3, opaque) >> ((addr & 3) * 8) & 0xFF;
+#else
     return apic_read(addr & ~3) >> ((addr & 3) * 8) & 0xFF;
+#endif
 }
+#ifndef LIB86CPU
 static void apic_writeb(uint32_t addr, uint32_t data)
+#else
+void apic_writeb(uint32_t addr, const uint8_t data, void *opaque)
+#endif
 {
     // Technically, we should not be doing this
     int offset = addr & 3, byte_offset = offset << 3;
     apic.temp_data &= ~(0xFF << byte_offset);
     apic.temp_data |= data << byte_offset;
     if (offset == 3) {
+#ifdef LIB86CPU
+        apic_write(addr & ~3, apic.temp_data, opaque);
+#else
         apic_write(addr & ~3, apic.temp_data);
+#endif
     }
     //APIC_FATAL("8-bit write to %08x with data %02x\n", addr, data);
 }
@@ -588,12 +634,16 @@ static void apic_reset(void)
         apic.lvt[i] = LVT_DISABLED; // Disabled
 
     // Map one page of MMIO at the specified address.
+#ifndef LIB86CPU
     io_register_mmio_read(apic.base, 4096, apic_readb, NULL, apic_read);
     io_register_mmio_write(apic.base, 4096, apic_writeb, NULL, apic_write);
+#else
+    mem_init_region_io(g_cpu, apic.base, 4096, false, io_handlers_t{ .fnr8 = apic_readb, .fnr32 = apic_read, .fnw8 = apic_writeb, .fnw32 = apic_write }, nullptr, true);
+#endif
 }
 
 // Find out how many ticks until next interrupt
-int apic_next(itick_t now)
+itick_t apic_next(itick_t now)
 {
     // TODO: TSC Deadline mode
     if (!apic.enabled)

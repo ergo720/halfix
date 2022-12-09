@@ -1,4 +1,8 @@
+#ifndef LIB86CPU
 #include "cpuapi.h" // Needed for IDE DMA
+#else
+#include "lib86cpu/cpu.h"
+#endif
 #include "devices.h"
 #include "drive.h"
 #include "platform.h"
@@ -463,9 +467,9 @@ static void ide_pio_clear(struct ide_controller* ctrl, int offset, int length)
 //  Right justified strings (justify_left=0): "          HELLO WORLD"
 //  Left justified strings (justify_left=1):  "HELLO WORLD          "
 //  Swapped strings: "HELLO " --> "EHLL O"
-static void ide_pio_store_string(struct ide_controller* ctrl, char* string, int pos, int length, int swap, int justify_left)
+static void ide_pio_store_string(struct ide_controller* ctrl, const char* string, int pos, int length, int swap, int justify_left)
 {
-    char* buffer = alloca(length + 1); // Account for null-terminator
+    char* buffer = (char *)alloca(length + 1); // Account for null-terminator
     // Justify the string.
     if (justify_left) {
         sprintf(buffer, "%-*s", length, string);
@@ -480,12 +484,12 @@ static void ide_pio_store_string(struct ide_controller* ctrl, char* string, int 
 // Simple utility functions to read data in big endian format
 static inline uint16_t read16be(void* x)
 {
-    uint8_t* buf = x;
+    uint8_t* buf = (uint8_t *)x;
     return buf[0] << 8 | buf[1];
 }
 static inline uint32_t read32be(void* x)
 {
-    uint8_t* buf = x;
+    uint8_t* buf = (uint8_t *)x;
     return buf[0] << 24 | buf[1] << 16 | buf[2] << 8 | buf[3];
 }
 
@@ -545,7 +549,7 @@ static void ide_atapi_stop_command(struct ide_controller* ctrl)
 
 static void ide_atapi_read_complete(void* thisptr, int x)
 {
-    struct ide_controller* ctrl = thisptr;
+    struct ide_controller* ctrl = (ide_controller *)thisptr;
     if (x == -1) {
         ide_atapi_abort(ctrl, ATAPI_SENSE_ILLEGAL_REQUEST, 0); // ?
         IDE_FATAL("ATAPI Read error todo\n");
@@ -608,7 +612,7 @@ static void ide_atapi_read(struct ide_controller* ctrl)
 
 static void ide_atapi_read_cb(void* thisptr, int stat)
 {
-    struct ide_controller* ctrl = thisptr;
+    struct ide_controller* ctrl = (ide_controller *)thisptr;
     if (stat == -1) {
         IDE_FATAL("ATAPI: failed to read sector\n");
     }
@@ -996,7 +1000,7 @@ static void ide_atapi_run_command(struct ide_controller* ctrl)
 
 // We need these functions to restart the command
 static void ide_read_sectors(struct ide_controller* ctrl, int lba48, int chunk_count);
-static void drive_write_callback(void* this, int res);
+static void drive_write_callback(void* drive, int res);
 
 // After the PIO buffer is emptied, this function is called so that the drive knows what to do with the data
 static void ide_pio_read_callback(struct ide_controller* ctrl)
@@ -1161,7 +1165,11 @@ static void ide_pio_write_callback(struct ide_controller* ctrl)
 static FILE* test;
 #endif
 // Read a byte from the PIO buffer
+#ifndef LIB86CPU
 static uint32_t ide_pio_readb(uint32_t port)
+#else
+uint8_t ide_pio_readb(uint32_t port, void *opaque)
+#endif
 {
     struct ide_controller* ctrl = &ide[~port >> 7 & 1];
     uint8_t result = ctrl->pio_buffer[ctrl->pio_position++];
@@ -1173,13 +1181,22 @@ static uint32_t ide_pio_readb(uint32_t port)
     return result;
 }
 // Read a word from the PIO buffer
+#ifndef LIB86CPU
 static uint32_t ide_pio_readw(uint32_t port)
+#else
+uint16_t ide_pio_readw(uint32_t port, void *opaque)
+#endif
 {
     struct ide_controller* ctrl = &ide[~port >> 7 & 1];
     // Penalize unaligned PIO accesses
     if ((ctrl->pio_position | ctrl->pio_length) & 1) {
+#ifdef LIB86CPU
+        uint32_t res = ide_pio_readb(port, opaque);
+        res |= ide_pio_readb(port, opaque) << 8;
+#else
         uint32_t res = ide_pio_readb(port);
         res |= ide_pio_readb(port) << 8;
+#endif
         return res;
     }
 
@@ -1193,16 +1210,27 @@ static uint32_t ide_pio_readw(uint32_t port)
     return result;
 }
 // Read a dword from the PIO buffer
+#ifndef LIB86CPU
 static uint32_t ide_pio_readd(uint32_t port)
+#else
+uint32_t ide_pio_readd(uint32_t port, void *opaque)
+#endif
 {
     struct ide_controller* ctrl = &ide[~port >> 7 & 1];
     // Penalize unaligned PIO accesses
     if ((ctrl->pio_position | ctrl->pio_length) & 3) {
+#ifdef LIB86CPU
+        uint32_t res = ide_pio_readb(port, opaque);
+        res |= ide_pio_readb(port, opaque) << 8;
+        res |= ide_pio_readb(port, opaque) << 16;
+        res |= ide_pio_readb(port, opaque) << 24;
+#else
         uint32_t res = ide_pio_readb(port);
         res |= ide_pio_readb(port) << 8;
         res |= ide_pio_readb(port) << 16;
         res |= ide_pio_readb(port) << 24;
         return res;
+#endif
     }
 
     uint32_t result = ctrl->pio_buffer32[ctrl->pio_position >> 2];
@@ -1216,7 +1244,11 @@ static uint32_t ide_pio_readd(uint32_t port)
 }
 
 // Write a byte to the PIO buffer
+#ifndef LIB86CPU
 static void ide_pio_writeb(uint32_t port, uint32_t data)
+#else
+void ide_pio_writeb(uint32_t port, const uint8_t data, void *opaque)
+#endif
 {
     struct ide_controller* ctrl = &ide[~port >> 7 & 1];
     ctrl->pio_buffer[ctrl->pio_position++] = data;
@@ -1227,16 +1259,26 @@ static void ide_pio_writeb(uint32_t port, uint32_t data)
 #endif
 }
 // Write a word to the PIO buffer
+#ifndef LIB86CPU
 static void ide_pio_writew(uint32_t port, uint32_t data)
+#else
+void ide_pio_writew(uint32_t port, const uint16_t data, void *opaque)
+#endif
 {
     struct ide_controller* ctrl = &ide[~port >> 7 & 1];
 #ifdef PIO_LOG
     fprintf(test, "o 01f0 = %04x\n", data);
 #endif
     if ((ctrl->pio_position | ctrl->pio_length) & 1) {
+#ifdef LIB86CPU
+        ide_pio_writeb(port, data & 0xFF, opaque);
+        ide_pio_writeb(port, data >> 8 & 0xFF, opaque);
+        return;
+#else
         ide_pio_writeb(port, data & 0xFF);
         ide_pio_writeb(port, data >> 8 & 0xFF);
         return;
+#endif
     }
     ctrl->pio_buffer16[ctrl->pio_position >> 1] = data;
     ctrl->pio_position += 2;
@@ -1244,18 +1286,30 @@ static void ide_pio_writew(uint32_t port, uint32_t data)
         ide_pio_write_callback(ctrl);
 }
 // Write a dword to the PIO buffer
+#ifndef LIB86CPU
 static void ide_pio_writed(uint32_t port, uint32_t data)
+#else
+void ide_pio_writed(uint32_t port, const uint32_t data, void *opaque)
+#endif
 {
     struct ide_controller* ctrl = &ide[~port >> 7 & 1];
 #ifdef PIO_LOG
     fprintf(test, "o 01f0 = %08x\n", data);
 #endif
     if ((ctrl->pio_position | ctrl->pio_length) & 3) {
+#ifdef LIB86CPU
+        ide_pio_writeb(port, data & 0xFF, opaque);
+        ide_pio_writeb(port, data >> 8 & 0xFF, opaque);
+        ide_pio_writeb(port, data >> 16 & 0xFF, opaque);
+        ide_pio_writeb(port, data >> 24 & 0xFF, opaque);
+        return;
+#else
         ide_pio_writeb(port, data & 0xFF);
         ide_pio_writeb(port, data >> 8 & 0xFF);
         ide_pio_writeb(port, data >> 16 & 0xFF);
         ide_pio_writeb(port, data >> 24 & 0xFF);
         return;
+#endif
     }
     ctrl->pio_buffer32[ctrl->pio_position >> 2] = data;
     ctrl->pio_position += 4;
@@ -1286,7 +1340,11 @@ static void ide_set_signature(struct ide_controller* ctrl)
 }
 
 // Read from an IDE port
+#ifndef LIB86CPU
 static uint32_t ide_read(uint32_t port)
+#else
+uint8_t ide_read(uint32_t port, void *opaque)
+#endif
 {
     struct ide_controller* ctrl = &ide[~port >> 7 & 1];
     UNUSED(ctrl);
@@ -1324,11 +1382,11 @@ static void ide_update_head(struct ide_controller* ctrl)
     IDE_LOG("Chose %s drive on %sary\n", ctrl->selected ? "slave" : "master", get_ctrl_id(ctrl) ? "second" : "prim");
 }
 
-static void ide_read_sectors_callback(void* this, int result)
+static void ide_read_sectors_callback(void* ide, int result)
 {
     if (result < 0)
-        ide_abort_command(this);
-    struct ide_controller* ctrl = this;
+        ide_abort_command((ide_controller *)ide);
+    struct ide_controller* ctrl = (ide_controller *)ide;
 
     // Decrement sector count
     ctrl->sector_count -= ctrl->sectors_read;
@@ -1437,11 +1495,11 @@ static void ide_write_sectors(struct ide_controller* ctrl, int lba48, int chunk_
     ctrl->pio_position = 0;
     ctrl->pio_length = ctrl->sectors_read * 512;
 }
-static void drive_write_callback(void* this, int result)
+static void drive_write_callback(void* drive, int result)
 {
     if (result < 0)
-        ide_abort_command(this);
-    struct ide_controller* ctrl = this;
+        ide_abort_command((ide_controller *)drive);
+    struct ide_controller* ctrl = (ide_controller *)drive;
     // Decrement sector count
     ctrl->sector_count -= ctrl->sectors_read;
 
@@ -1562,9 +1620,9 @@ static void ide_identify(struct ide_controller* ctrl)
     ctrl->pio_position = 0;
 }
 
-static void ide_read_dma_handler(void* this, int status)
+static void ide_read_dma_handler(void* ide, int status)
 {
-    struct ide_controller* ctrl = this;
+    struct ide_controller* ctrl = (ide_controller *)ide;
     UNUSED(status);
     uint32_t prdt_addr = ctrl->prdt_address,
              sectors = ide_get_sector_count(ctrl, ctrl->lba48),
@@ -1576,8 +1634,15 @@ static void ide_read_dma_handler(void* this, int status)
     void* temp = alloca(65536);
     while (1) {
         // Read fields from PRDT
+#ifndef LIB86CPU
         uint32_t dest = cpu_read_phys(prdt_addr), other_stuff = cpu_read_phys(prdt_addr + 4),
                  count = other_stuff & 0xFFFF, end = other_stuff & 0x80000000;
+#else
+        uint32_t dest, other_stuff;
+        mem_read_block_phys(g_cpu, prdt_addr, 4, (uint8_t *)&dest);
+        mem_read_block_phys(g_cpu, prdt_addr + 4, 4, (uint8_t *)&other_stuff);
+        uint32_t count = other_stuff & 0xFFFF, end = other_stuff & 0x80000000;
+#endif
         count |= !count << 16; // If count is zero, then we requested 0x10000 bytes.
 
         uint32_t dma_bytes = count;
@@ -1591,6 +1656,7 @@ static void ide_read_dma_handler(void* this, int status)
         IDE_LOG(" -- sector: %llx\n", (unsigned long long)offset >> 9);
         //if(offset == 0x19ba15000) __asm__("int3");
 
+#ifndef LIB86CPU
         // Invalidate the TLB for all the pages we are going to mess with
         {
             // Round up so that we catch every page
@@ -1598,12 +1664,17 @@ static void ide_read_dma_handler(void* this, int status)
             for (int i = 0; i < count_rounded; i += 4096)
                 cpu_init_dma(dest + i);
         }
+#endif
         while (dma_bytes >= 512) {
             int res = drive_read(drv, NULL, temp, 512, offset, NULL);
             if (res != DRIVE_RESULT_SYNC)
                 IDE_FATAL("Expected sync response for prefetched data\n");
 
+#ifndef LIB86CPU
             cpu_write_mem(dest, temp, 512);
+#else
+            mem_write_block_phys(g_cpu, dest, 512, temp);
+#endif
             dma_bytes -= 512;
             dest += 512;
             offset += 512;
@@ -1638,9 +1709,9 @@ void drive_debug(int64_t x)
     printf("\n");
 }
 
-static void ide_write_dma_handler(void* this, int status)
+static void ide_write_dma_handler(void* ide, int status)
 {
-    struct ide_controller* ctrl = this;
+    struct ide_controller* ctrl = (ide_controller *)ide;
     UNUSED(status);
     uint32_t prdt_addr = ctrl->prdt_address,
              sectors = ide_get_sector_count(ctrl, ctrl->lba48),
@@ -1648,12 +1719,19 @@ static void ide_write_dma_handler(void* this, int status)
     uint64_t offset = ide_get_sector_offset(ctrl, ctrl->lba48) * 512ULL;
     struct drive_info* drv = SELECTED(ctrl, info);
 
-    void* mem = cpu_get_ram_ptr();
+    void* mem = get_ram_ptr(g_cpu);
 
     while (1) {
         // Read fields from PRDT
+#ifndef LIB86CPU
         uint32_t dest = cpu_read_phys(prdt_addr), other_stuff = cpu_read_phys(prdt_addr + 4),
-                 count = other_stuff & 0xFFFF, end = other_stuff & 0x80000000;
+            count = other_stuff & 0xFFFF, end = other_stuff & 0x80000000;
+#else
+        uint32_t dest, other_stuff;
+        mem_read_block_phys(g_cpu, prdt_addr, 4, (uint8_t *)&dest);
+        mem_read_block_phys(g_cpu, prdt_addr + 4, 4, (uint8_t *)&other_stuff);
+        uint32_t count = other_stuff & 0xFFFF, end = other_stuff & 0x80000000;
+#endif
         count |= !count << 16; // If count is zero, then we requested 0x10000 bytes.
 
         uint32_t dma_bytes = count;
@@ -1705,7 +1783,11 @@ static void ide_write_dma(struct ide_controller* ctrl, int lba48)
 }
 
 // Write to an IDE port
+#ifndef LIB86CPU
 static void ide_write(uint32_t port, uint32_t data)
+#else
+void ide_write(uint32_t port, const uint8_t data, void *opaque)
+#endif
 {
     struct ide_controller* ctrl = &ide[~port >> 7 & 1];
     int ctrl_has_media = -controller_has_media(ctrl);
@@ -2039,47 +2121,47 @@ static void ide_write(uint32_t port, uint32_t data)
 // The following section is just for PCI-enabled DMA
 void ide_write_prdt(uint32_t addr, uint32_t data)
 {
-    struct ide_controller* this = &ide[addr >> 3 & 1];
+    struct ide_controller* ctrl = &ide[addr >> 3 & 1];
     switch (addr & 7) {
     case 0: {
-        uint8_t diffxor = this->dma_command ^ data;
+        uint8_t diffxor = ctrl->dma_command ^ data;
         if (diffxor & 1) { // Only update status bits if bit 0 changed.
-            this->dma_command = data & 9;
-            int lba48 = this->lba48, result;
+            ctrl->dma_command = data & 9;
+            int lba48 = ctrl->lba48, result;
             if ((data & 1) == 0)
                 return;
             IDE_LOG("Executing DMA command\n");
-            switch (this->command_issued) {
+            switch (ctrl->command_issued) {
             case 0x25:
             case 0xC8:
-                result = drive_prefetch(SELECTED(this, info), this, ide_get_sector_count(this, lba48), ide_get_sector_offset(this, lba48) << (drv_offset_t)9, ide_read_dma_handler);
+                result = drive_prefetch(SELECTED(ctrl, info), ctrl, ide_get_sector_count(ctrl, lba48), ide_get_sector_offset(ctrl, lba48) << (drv_offset_t)9, ide_read_dma_handler);
                 if (result == DRIVE_RESULT_SYNC)
-                    ide_read_dma_handler(this, 0);
+                    ide_read_dma_handler(ctrl, 0);
                 else
-                    this->status |= ATA_STATUS_BSY;
+                    ctrl->status |= ATA_STATUS_BSY;
                 break;
             case 0x35:
             case 0xCA:
-                result = drive_prefetch(SELECTED(this, info), this, ide_get_sector_count(this, lba48), ide_get_sector_offset(this, lba48) << (drv_offset_t)9, ide_write_dma_handler);
+                result = drive_prefetch(SELECTED(ctrl, info), ctrl, ide_get_sector_count(ctrl, lba48), ide_get_sector_offset(ctrl, lba48) << (drv_offset_t)9, ide_write_dma_handler);
                 if (result == DRIVE_RESULT_SYNC)
-                    ide_write_dma_handler(this, 0);
+                    ide_write_dma_handler(ctrl, 0);
                 else
-                    this->status |= ATA_STATUS_BSY;
+                    ctrl->status |= ATA_STATUS_BSY;
                 break;
             }
         }
         break;
     }
     case 2:
-        this->dma_status &= ~(data & 6);
+        ctrl->dma_status &= ~(data & 6);
         break;
     case 4:
     case 5:
     case 6:
     case 7: {
         int shift = ((addr & 3) << 3);
-        this->prdt_address &= ~(0xFF << shift);
-        this->prdt_address |= data << shift;
+        ctrl->prdt_address &= ~(0xFF << shift);
+        ctrl->prdt_address |= data << shift;
         break;
     }
     default:
@@ -2088,23 +2170,23 @@ void ide_write_prdt(uint32_t addr, uint32_t data)
 }
 uint32_t ide_read_prdt(uint32_t addr)
 {
-    struct ide_controller* this = &ide[addr >> 3 & 1];
+    struct ide_controller*ctrl = &ide[addr >> 3 & 1];
     switch (addr & 7) {
     case 0:
-        return this->dma_command;
+        return ctrl->dma_command;
     case 2:
-        return this->dma_status;
+        return ctrl->dma_status;
     case 1:
     case 3:
         return 0; // Invalid
     case 4:
-        return this->prdt_address >> 0 & 0xFF;
+        return ctrl->prdt_address >> 0 & 0xFF;
     case 5:
-        return this->prdt_address >> 8 & 0xFF;
+        return ctrl->prdt_address >> 8 & 0xFF;
     case 6:
-        return this->prdt_address >> 16 & 0xFF;
+        return ctrl->prdt_address >> 16 & 0xFF;
     case 7:
-        return this->prdt_address >> 24 & 0xFF;
+        return ctrl->prdt_address >> 24 & 0xFF;
     }
     return 0; // unreachable
 }
@@ -2117,6 +2199,8 @@ void ide_init(struct pc_settings* pc)
 #endif
     io_register_reset(ide_reset);
     state_register(ide_state);
+
+#ifndef LIB86CPU
     io_register_read(0x1F0, 1, ide_pio_readb, ide_pio_readw, ide_pio_readd);
     io_register_write(0x1F0, 1, ide_pio_writeb, ide_pio_writew, ide_pio_writed);
     io_register_read(0x170, 1, ide_pio_readb, ide_pio_readw, ide_pio_readd);
@@ -2131,6 +2215,7 @@ void ide_init(struct pc_settings* pc)
     io_register_read(0x3F6, 1, ide_read, NULL, NULL);
     io_register_write(0x376, 1, ide_write, NULL, NULL);
     io_register_write(0x3F6, 1, ide_write, NULL, NULL);
+#endif
 
     for (int i = 0; i < 4; i++) {
         struct drive_info* info = &pc->drives[i];

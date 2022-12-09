@@ -1,7 +1,7 @@
 // Handles memory mapping
 #include "cpu/cpu.h"
 #include "cpu/instrument.h"
-#include "mmio.h"
+#include "io2.h"
 
 #define EXCEPTION_HANDLER return 1
 

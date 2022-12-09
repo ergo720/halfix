@@ -2,7 +2,9 @@
 #define PC_H
 
 #include "drive.h"
+#ifndef LIB86CPU
 #include "cpuapi.h" // for struct cpu_config
+#endif
 #include <stdint.h>
 
 struct loaded_file {
@@ -86,9 +88,9 @@ struct pc_settings {
     struct ne2000_settings ne2000;
 
     struct drive_info floppy_drives[2];
-
+#ifndef LIB86CPU
     struct cpu_config cpu;
-
+#endif
     struct virtio_cfg virtio[MAX_VIRTIO_DEVICES];
 
     int boot_kernel;
@@ -106,7 +108,12 @@ enum {
 };
 
 int pc_init(struct pc_settings* pc);
+#ifdef LIB86CPU
+void pc_execute();
+extern uint64_t next_deadline;
+#else
 int pc_execute(void);
+#endif
 uint32_t pc_run(void);
 void pc_set_a20(int state);
 void pc_in_hlt(void);

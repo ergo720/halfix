@@ -111,7 +111,7 @@ struct drive_info_file {
 #endif
 
 // Join two paths together
-static void join_path(char* dest, int alen, char* a, char* b)
+static void join_path(char* dest, int alen, const char* a, const char* b)
 {
     strcpy(dest, a);
     if (dest[alen - 1] != PATHSEP) {
@@ -135,16 +135,16 @@ static void drive_get_path(char* dest, char* pathbase, uint32_t x)
 
 // Reads block information from a file.
 // Called by drive_internal_read_check
-static int drive_read_block_internal(struct drive_internal_info* this, struct block_info* info, void* buffer, uint32_t length, uint32_t position)
+static int drive_read_block_internal(struct drive_internal_info*drive, struct block_info* info, void* buffer, uint32_t length, uint32_t position)
 {
-    uint32_t blockoffs = position % this->block_size;
+    uint32_t blockoffs = position % drive->block_size;
 #ifdef EMSCRIPTEN
     UNUSED(info);
     return EM_ASM_INT({
         /* id, buffer, offset, length */
         return window["drives"][$0]["readCache"]($1, $2, $3, $4) | 0;
     },
-        this->drive_id, position / this->block_size, buffer, blockoffs, length);
+        drive->drive_id, position / drive->block_size, buffer, blockoffs, length);
 #else
     memcpy(buffer, info->data + blockoffs, length);
     return 0;
@@ -153,7 +153,7 @@ static int drive_read_block_internal(struct drive_internal_info* this, struct bl
 
 #ifndef EMSCRIPTEN
 // Read file from cache, uncompress, and return allocated value
-static void* drive_read_file(struct drive_internal_info* this, char* fn)
+static void* drive_read_file(struct drive_internal_info* drive, char* fn)
 {
     char temp[1024 + 8];
     int fd;
@@ -169,7 +169,7 @@ static void* drive_read_file(struct drive_internal_info* this, char* fn)
             perror("open: ");
             DRIVE_FATAL("Could not open file %s\n", fn);
         }
-        data = malloc(this->block_size);
+        data = malloc(drive->block_size);
         size = lseek(fd, 0, SEEK_END);
         lseek(fd, 0, SEEK_SET);
         if (read(fd, data, size) != (ssize_t)size)
@@ -179,7 +179,7 @@ static void* drive_read_file(struct drive_internal_info* this, char* fn)
     }
 
     // Read the block into a chunk of temporary memory, and decompress
-    data = malloc(this->block_size);
+    data = malloc(drive->block_size);
     size = lseek(fd, 0, SEEK_END);
     lseek(fd, 0, SEEK_SET);
     readbuf = malloc(size);
@@ -191,9 +191,9 @@ static void* drive_read_file(struct drive_internal_info* this, char* fn)
     inflate_stream.zfree = Z_NULL;
     inflate_stream.opaque = Z_NULL;
     inflate_stream.avail_in = inflate_stream.total_in = size;
-    inflate_stream.next_in = readbuf;
-    inflate_stream.avail_out = inflate_stream.total_out = this->block_size;
-    inflate_stream.next_out = data;
+    inflate_stream.next_in = (Bytef *)readbuf;
+    inflate_stream.avail_out = inflate_stream.total_out = drive->block_size;
+    inflate_stream.next_out = (Bytef *)data;
     int err = inflateInit(&inflate_stream);
     if (err == Z_OK) {
         err = inflate(&inflate_stream, Z_FINISH);
@@ -212,11 +212,11 @@ static void* drive_read_file(struct drive_internal_info* this, char* fn)
 #endif
 
 // Read data from remote source (i.e. file, web server, etc.)
-static int drive_internal_read_remote(struct drive_internal_info* this, struct block_info* blockinfo, uint8_t* buffer, uint32_t pos, uint32_t length)
+static int drive_internal_read_remote(struct drive_internal_info* drive, struct block_info* blockinfo, uint8_t* buffer, uint32_t pos, uint32_t length)
 {
     char temp[1024];
-    uint32_t block = pos / this->block_size;
-    drive_get_path(temp, this->paths[blockinfo->pathindex], block);
+    uint32_t block = pos / drive->block_size;
+    drive_get_path(temp, drive->paths[blockinfo->pathindex], block);
 #ifdef EMSCRIPTEN
     // Mark the block cache entry as valid
     blockinfo->data = (uint8_t*)(1);
@@ -226,14 +226,14 @@ static int drive_internal_read_remote(struct drive_internal_info* this, struct b
         /* str, id */
         return window["drives"][$0]["readQueue"]($1, $2);
     },
-        this->drive_id, temp, block);
+        drive->drive_id, temp, block);
 #else
     // Open the file, allocate memory, read file, and close file.
-    blockinfo->data = drive_read_file(this, temp);
+    blockinfo->data = (uint8_t *)drive_read_file(drive, temp);
 
 // If we want to run in sync mode, then copy the data
 #ifndef SIMULATE_ASYNC_ACCESS
-    memcpy(buffer, blockinfo->data + (pos % this->block_size), length);
+    memcpy(buffer, blockinfo->data + (pos % drive->block_size), length);
 #else
     UNUSED(buffer);
     UNUSED(length);
@@ -244,7 +244,7 @@ static int drive_internal_read_remote(struct drive_internal_info* this, struct b
 }
 
 // This function loads blocks from the cache. Returns 0 if all blocks were read from the cache.
-static int drive_internal_read_check(struct drive_internal_info* this, void* buffer, uint32_t length, drv_offset_t position, int no_xhr)
+static int drive_internal_read_check(struct drive_internal_info* drive, void* buffer, uint32_t length, drv_offset_t position, int no_xhr)
 {
     uint32_t readEnd = position + length,
              blocksToRead = ((((readEnd - 1) & ~BLOCK_MASK) - (position & ~BLOCK_MASK)) >> BLOCK_SHIFT) + 1;
@@ -254,7 +254,7 @@ static int drive_internal_read_check(struct drive_internal_info* this, void* buf
     int retval = 0;
 
     for (unsigned int i = 0; i < blocksToRead; i++) {
-        struct block_info* blockInformation = &this->blocks[currentFilePosition >> BLOCK_SHIFT];
+        struct block_info* blockInformation = &drive->blocks[currentFilePosition >> BLOCK_SHIFT];
         uint32_t begin = 0,
                  end = BLOCK_SIZE,
                  len = 0;
@@ -272,17 +272,17 @@ static int drive_internal_read_check(struct drive_internal_info* this, void* buf
         len = end - begin;
         //printf("BlockInformation: %p Data: %p cfp=%d\n", blockInformation, blockInformation->data, currentFilePosition / 512);
         if (blockInformation->data) {
-            retval |= drive_read_block_internal(this, blockInformation, buffer, len, currentFilePosition);
+            retval |= drive_read_block_internal(drive, blockInformation, buffer, len, currentFilePosition);
         } else {
             if (!no_xhr)
-                if (drive_internal_read_remote(this, blockInformation, buffer, currentFilePosition, len) < 0)
+                if (drive_internal_read_remote(drive, blockInformation, (uint8_t *)buffer, currentFilePosition, len) < 0)
                     DRIVE_FATAL("Unable to load disk\n");
 #ifdef SIMULATE_ASYNC_ACCESS // If we aren't simulating async, then don't set retval
             retval |= 1;
 #endif
         }
 
-        (uint8_t *)buffer += len;
+        //buffer += len; //XXX: this doesn't work. Was this intended to modify the buffer pointer argument?
         currentFilePosition += len;
     }
     return retval;
@@ -293,36 +293,36 @@ static void drive_internal_read_cb(void* this_ptr, int status)
 {
     if (!transfer_in_progress)
         return;
-    struct drive_internal_info* this = this_ptr;
+    struct drive_internal_info* drive = (drive_internal_info *)this_ptr;
     // Make sure everything is loaded
-    if (drive_internal_read_check(this, this->argument_buffer, this->argument_length, this->argument_position, 1))
+    if (drive_internal_read_check(drive, drive->argument_buffer, drive->argument_length, drive->argument_position, 1))
         DRIVE_FATAL("We haven't loaded everything..?\n");
-    this->callback(this->ide_callback_arg1, status);
+    drive->callback(drive->ide_callback_arg1, status);
 }
 #endif
 
 // Reads data from drives
 static int drive_internal_read(void* this_ptr, void* cb_ptr, void* buffer, uint32_t length, drv_offset_t position, drive_cb cb)
 {
-    struct drive_internal_info* this = this_ptr;
-    if (!drive_internal_read_check(this, buffer, length, position, 0))
+    struct drive_internal_info* drive = (drive_internal_info *)this_ptr;
+    if (!drive_internal_read_check(drive, buffer, length, position, 0))
         return DRIVE_RESULT_SYNC;
 
     // Store information
-    this->argument_buffer = buffer;
-    this->argument_length = length;
-    this->argument_position = position;
-    this->callback = cb;
-    this->ide_callback_arg1 = cb_ptr;
+    drive->argument_buffer = buffer;
+    drive->argument_length = length;
+    drive->argument_position = position;
+    drive->callback = cb;
+    drive->ide_callback_arg1 = cb_ptr;
     transfer_in_progress = 1;
 #ifdef EMSCRIPTEN
     EM_ASM_({
         window["drives"][$0]["flushReadQueue"]($1, $2);
     },
-        this->drive_id, drive_internal_read_cb, this);
+        drive->drive_id, drive_internal_read_cb, drive);
 #elif defined(SIMULATE_ASYNC_ACCESS)
     global_cb = drive_internal_read_cb;
-    global_cb_arg1 = this;
+    global_cb_arg1 = drive;
 #endif
 
     return DRIVE_RESULT_ASYNC;
@@ -333,11 +333,11 @@ static int drive_internal_read(void* this_ptr, void* cb_ptr, void* buffer, uint3
 // ============================================================================
 
 // Read data from remote source (i.e. file, web server, etc.)
-static int drive_internal_write_remote(struct drive_internal_info* this, struct block_info* blockinfo, uint8_t* buffer, uint32_t pos, drv_offset_t length)
+static int drive_internal_write_remote(struct drive_internal_info* drive, struct block_info* blockinfo, uint8_t* buffer, uint32_t pos, drv_offset_t length)
 {
     char temp[1024];
-    uint32_t block = pos / this->block_size;
-    drive_get_path(temp, this->paths[blockinfo->pathindex], block);
+    uint32_t block = pos / drive->block_size;
+    drive_get_path(temp, drive->paths[blockinfo->pathindex], block);
 #ifdef EMSCRIPTEN
     // We have to read the block in order for it to be valid
     blockinfo->data = (uint8_t*)(1);
@@ -347,14 +347,14 @@ static int drive_internal_write_remote(struct drive_internal_info* this, struct 
         /* str, id */
         return window["drives"][$0]["readQueue"]($1, $2);
     },
-        this->drive_id, temp, block);
+        drive->drive_id, temp, block);
 #else
     // Open the file, allocate memory, read file, and close file.
-    blockinfo->data = drive_read_file(this, temp);
+    blockinfo->data = (uint8_t *)drive_read_file(drive, temp);
 
 // If we want to run in sync mode, then copy the data
 #ifndef SIMULATE_ASYNC_ACCESS
-    memcpy(blockinfo->data + (pos % this->block_size), buffer, length);
+    memcpy(blockinfo->data + (pos % drive->block_size), buffer, length);
 #else
     UNUSED(buffer);
     UNUSED(length);
@@ -365,24 +365,24 @@ static int drive_internal_write_remote(struct drive_internal_info* this, struct 
 }
 
 // Reads block information from a file.
-static int drive_write_block_internal(struct drive_internal_info* this, struct block_info* info, void* buffer, uint32_t length, drv_offset_t position)
+static int drive_write_block_internal(struct drive_internal_info* drive, struct block_info* info, void* buffer, uint32_t length, drv_offset_t position)
 {
     info->modified = 1;
-    uint32_t blockoffs = position % this->block_size;
+    uint32_t blockoffs = position % drive->block_size;
 #ifdef EMSCRIPTEN
     UNUSED(info);
     return EM_ASM_INT({
         /* id, buffer, offset, length */
         return window["drives"][$0]["writeCache"]($1, $2, $3, $4);
     },
-        this->drive_id, position / this->block_size, buffer, blockoffs, length);
+        drive->drive_id, position / drive->block_size, buffer, blockoffs, length);
 #else
     memcpy(info->data + blockoffs, buffer, length);
     return 0;
 #endif
 }
 // This function loads blocks from the cache. Returns 0 if all blocks were read from the cache.
-static int drive_internal_write_check(struct drive_internal_info* this, void* buffer, uint32_t length, drv_offset_t position, int no_xhr)
+static int drive_internal_write_check(struct drive_internal_info* drive, void* buffer, uint32_t length, drv_offset_t position, int no_xhr)
 {
     drv_offset_t writeEnd = position + length,
                  blocksToWrite = ((((writeEnd - 1) & ~BLOCK_MASK) - (position & ~BLOCK_MASK)) >> BLOCK_SHIFT) + 1;
@@ -392,7 +392,7 @@ static int drive_internal_write_check(struct drive_internal_info* this, void* bu
     int retval = 0;
 
     for (unsigned int i = 0; i < blocksToWrite; i++) {
-        struct block_info* blockInformation = &this->blocks[currentFilePosition >> BLOCK_SHIFT];
+        struct block_info* blockInformation = &drive->blocks[currentFilePosition >> BLOCK_SHIFT];
         uint32_t begin = 0,
                  end = BLOCK_SIZE,
                  len = 0;
@@ -408,17 +408,17 @@ static int drive_internal_write_check(struct drive_internal_info* this, void* bu
         len = end - begin;
         //printf("BlockInformation: %p Data: %p cfp=%d\n", blockInformation, blockInformation->data, currentFilePosition / 512);
         if (blockInformation->data)
-            retval |= drive_write_block_internal(this, blockInformation, buffer, len, currentFilePosition);
+            retval |= drive_write_block_internal(drive, blockInformation, buffer, len, currentFilePosition);
         else {
             if (!no_xhr)
-                if (drive_internal_write_remote(this, blockInformation, buffer, currentFilePosition, len) < 0)
+                if (drive_internal_write_remote(drive, blockInformation, (uint8_t *)buffer, currentFilePosition, len) < 0)
                     DRIVE_FATAL("Unable to load disk\n");
 #ifdef SIMULATE_ASYNC_ACCESS // If we aren't simulating async, then don't set retval
             retval |= 1;
 #endif
         }
 
-        (uint8_t *)buffer += len;
+        //buffer += len; //XXX: this doesn't work. Was this intended to modify the buffer pointer argument?
         currentFilePosition += len;
     }
     return retval;
@@ -429,35 +429,35 @@ static void drive_internal_write_cb(void* this_ptr, int status)
 {
     if (!transfer_in_progress)
         return;
-    struct drive_internal_info* this = this_ptr;
-    if (drive_internal_write_check(this, this->argument_buffer, this->argument_length, this->argument_position, 1))
+    struct drive_internal_info* drive = (drive_internal_info *)this_ptr;
+    if (drive_internal_write_check(drive, drive->argument_buffer, drive->argument_length, drive->argument_position, 1))
         DRIVE_FATAL("We haven't loaded everything..?\n");
-    this->callback(this->ide_callback_arg1, status);
+    drive->callback(drive->ide_callback_arg1, status);
 }
 #endif
 
 // Reads data from drives
 static int drive_internal_write(void* this_ptr, void* cb_ptr, void* buffer, uint32_t length, drv_offset_t position, drive_cb cb)
 {
-    struct drive_internal_info* this = this_ptr;
-    if (!drive_internal_write_check(this, buffer, length, position, 0))
+    struct drive_internal_info* drive = (drive_internal_info *)this_ptr;
+    if (!drive_internal_write_check(drive, buffer, length, position, 0))
         return DRIVE_RESULT_SYNC;
 
     // Store information
-    this->argument_buffer = buffer;
-    this->argument_length = length;
-    this->argument_position = position;
-    this->callback = cb;
-    this->ide_callback_arg1 = cb_ptr;
+    drive->argument_buffer = buffer;
+    drive->argument_length = length;
+    drive->argument_position = position;
+    drive->callback = cb;
+    drive->ide_callback_arg1 = cb_ptr;
     transfer_in_progress = 1;
 #ifdef EMSCRIPTEN
     EM_ASM_({
         window["drives"][$0]["flushReadQueue"]($1, $2);
     },
-        this->drive_id, drive_internal_write_cb, this);
+        drive->drive_id, drive_internal_write_cb, drive);
 #elif defined(SIMULATE_ASYNC_ACCESS)
     global_cb = drive_internal_write_cb;
-    global_cb_arg1 = this;
+    global_cb_arg1 = drive;
 #endif
 
     return DRIVE_RESULT_ASYNC;
@@ -472,17 +472,17 @@ static void drive_internal_prefetch_cb(void* this_ptr, int status)
 {
     if (!transfer_in_progress)
         return;
-    struct drive_internal_info* this = this_ptr;
-    this->callback(this->ide_callback_arg1, status);
+    struct drive_internal_info* drive = (drive_internal_info *)this_ptr;
+    drive->callback(drive->ide_callback_arg1, status);
 }
 #endif
 
 // Read data from remote source (i.e. file, web server, etc.)
-static int drive_internal_prefetch_remote(struct drive_internal_info* this, struct block_info* blockinfo, uint32_t pos, drv_offset_t length)
+static int drive_internal_prefetch_remote(struct drive_internal_info* drive, struct block_info* blockinfo, uint32_t pos, drv_offset_t length)
 {
     char temp[1024];
-    uint32_t block = pos / this->block_size;
-    drive_get_path(temp, this->paths[blockinfo->pathindex], block);
+    uint32_t block = pos / drive->block_size;
+    drive_get_path(temp, drive->paths[blockinfo->pathindex], block);
 #ifdef EMSCRIPTEN
     // Mark the block cache entry as valid
     blockinfo->data = (uint8_t*)(1);
@@ -491,10 +491,10 @@ static int drive_internal_prefetch_remote(struct drive_internal_info* this, stru
         /* str, id */
         return window["drives"][$0]["readQueue"]($1, $2);
     },
-        this->drive_id, temp, block);
+        drive->drive_id, temp, block);
 #else
     // Open the file, allocate memory, read file, and close file.
-    blockinfo->data = drive_read_file(this, temp);
+    blockinfo->data = (uint8_t *)drive_read_file(drive, temp);
 
     UNUSED(length);
 
@@ -503,7 +503,7 @@ static int drive_internal_prefetch_remote(struct drive_internal_info* this, stru
 }
 // This function prefetches information from the buffer, but does not load anything.
 // Returns 0 if all blocks were loaded from the cache
-static int drive_internal_prefetch_check(struct drive_internal_info* this, uint32_t length, drv_offset_t position)
+static int drive_internal_prefetch_check(struct drive_internal_info* drive, uint32_t length, drv_offset_t position)
 {
     drv_offset_t readEnd = position + length,
                  blocksToRead = ((((readEnd - 1) & ~BLOCK_MASK) - (position & ~BLOCK_MASK)) >> BLOCK_SHIFT) + 1;
@@ -512,7 +512,7 @@ static int drive_internal_prefetch_check(struct drive_internal_info* this, uint3
 
     int retval = 0;
     for (unsigned int i = 0; i < blocksToRead; i++) {
-        struct block_info* blockInformation = &this->blocks[currentFilePosition >> BLOCK_SHIFT];
+        struct block_info* blockInformation = &drive->blocks[currentFilePosition >> BLOCK_SHIFT];
         uint32_t begin = 0,
                  end = BLOCK_SIZE,
                  len = 0;
@@ -528,7 +528,7 @@ static int drive_internal_prefetch_check(struct drive_internal_info* this, uint3
         if (blockInformation->data) {
             // Nothing happens here -- we just pretend to read data
         } else {
-            if (drive_internal_prefetch_remote(this, blockInformation, currentFilePosition, len) < 0)
+            if (drive_internal_prefetch_remote(drive, blockInformation, currentFilePosition, len) < 0)
                 DRIVE_FATAL("Unable to load disk\n");
 #ifdef SIMULATE_ASYNC_ACCESS // If we aren't simulating async, then don't set retval
             retval |= 1;
@@ -543,24 +543,24 @@ static int drive_internal_prefetch(void* this_ptr, void* cb_ptr, uint32_t length
 {
     if (position > 0xFFFFFFFF)
         DRIVE_FATAL("TODO: big access\n");
-    struct drive_internal_info* this = this_ptr;
-    if (!drive_internal_prefetch_check(this, length, position))
+    struct drive_internal_info* drive = (drive_internal_info *)this_ptr;
+    if (!drive_internal_prefetch_check(drive, length, position))
         return DRIVE_RESULT_SYNC;
 
     // Store information
-    this->argument_length = length;
-    this->argument_position = position;
-    this->callback = cb;
-    this->ide_callback_arg1 = cb_ptr;
+    drive->argument_length = length;
+    drive->argument_position = position;
+    drive->callback = cb;
+    drive->ide_callback_arg1 = cb_ptr;
     transfer_in_progress = 1;
 #ifdef EMSCRIPTEN
     EM_ASM_({
         window["drives"][$0]["flushReadQueue"]($1, $2);
     },
-        this->drive_id, drive_internal_prefetch_cb, this);
+        drive->drive_id, drive_internal_prefetch_cb, drive);
 #elif defined(SIMULATE_ASYNC_ACCESS)
     global_cb = drive_internal_prefetch_cb;
-    global_cb_arg1 = this;
+    global_cb_arg1 = drive;
 #endif
 
     return DRIVE_RESULT_ASYNC;
@@ -569,48 +569,48 @@ static int drive_internal_prefetch(void* this_ptr, void* cb_ptr, uint32_t length
 static void drive_internal_state(void* this_ptr, char* pn)
 {
     char temp[100];
-    struct drive_internal_info* this = this_ptr;
-    struct bjson_object* obj = state_obj(pn, 4 + this->path_count + 1);
+    struct drive_internal_info* drive = (drive_internal_info *)this_ptr;
+    struct bjson_object* obj = state_obj(pn, 4 + drive->path_count + 1);
 
-    state_field(obj, 4, "size", &this->size);
-    state_field(obj, 4, "path_count", &this->path_count);
-    state_field(obj, 4, "block_count", &this->block_count);
-    uint32_t* block_infos = alloca(this->block_count * 4);
+    state_field(obj, 4, "size", &drive->size);
+    state_field(obj, 4, "path_count", &drive->path_count);
+    state_field(obj, 4, "block_count", &drive->block_count);
+    uint32_t* block_infos = (uint32_t *)alloca(drive->block_count * 4);
 
     if (state_is_reading()) {
-        int old_path_counts = this->path_count; // The current state file may have paths not in our current
-        state_field(obj, 4, "path_count", &this->path_count);
+        int old_path_counts = drive->path_count; // The current state file may have paths not in our current
+        state_field(obj, 4, "path_count", &drive->path_count);
         // Destroy all paths and load in our new paths
         for (int i = 0; i < old_path_counts; i++)
-            free(this->paths[i]);
-        this->paths = realloc(this->paths, this->path_count * sizeof(char*));
+            free(drive->paths[i]);
+        drive->paths = (char **)realloc(drive->paths, drive->path_count * sizeof(char*));
         int paths0 = 0;
-        for (unsigned int i = 0; i < this->path_count; i++) {
+        for (unsigned int i = 0; i < drive->path_count; i++) {
             sprintf(temp, "path%d", i);
-            state_string(obj, temp, &this->paths[i]);
-            printf("%s\n", this->paths[i]);
+            state_string(obj, temp, &drive->paths[i]);
+            printf("%s\n", drive->paths[i]);
             paths0++;
         }
 
         // Destroy all blocks
-        state_field(obj, this->block_count * 4, "block_array", block_infos);
-        for (unsigned int i = 0; i < this->block_count; i++) {
-            if (this->blocks[i].data)
-                free(this->blocks[i].data);
-            this->blocks[i].data = NULL;
-            this->blocks[i].modified = 0;
-            this->blocks[i].pathindex = block_infos[i];
+        state_field(obj, drive->block_count * 4, "block_array", block_infos);
+        for (unsigned int i = 0; i < drive->block_count; i++) {
+            if (drive->blocks[i].data)
+                free(drive->blocks[i].data);
+            drive->blocks[i].data = NULL;
+            drive->blocks[i].modified = 0;
+            drive->blocks[i].pathindex = block_infos[i];
         }
     } else {
         char pathname[1000];
         sprintf(pathname, "%s/%s", state_get_path_base(), pn);
         state_mkdir(pathname);
 
-        uint32_t path_count = this->path_count;
+        uint32_t path_count = drive->path_count;
         int existing_add = 1;
-        for (unsigned int i = 0; i < this->path_count; i++) {
-            printf("%s %s\n", pathname, this->paths[i]);
-            if (!strcmp(pathname, this->paths[i])) {
+        for (unsigned int i = 0; i < drive->path_count; i++) {
+            printf("%s %s\n", pathname, drive->paths[i]);
+            if (!strcmp(pathname, drive->paths[i])) {
                 existing_add = 0;
                 break;
             }
@@ -619,12 +619,12 @@ static void drive_internal_state(void* this_ptr, char* pn)
         state_field(obj, 4, "path_count", &path_count);
 
         int pwdindex = 0, pwdinc = 1;
-        for (unsigned int i = 0; i < this->path_count; i++) {
-            if (!strcmp(pathname, this->paths[i]))
+        for (unsigned int i = 0; i < drive->path_count; i++) {
+            if (!strcmp(pathname, drive->paths[i]))
                 pwdinc = 0; // Stop counting
             pwdindex += pwdinc;
             sprintf(temp, "path%d", i);
-            state_string(obj, temp, &this->paths[i]);
+            state_string(obj, temp, &drive->paths[i]);
         }
         if (pwdinc) {
             // Add new path to list
@@ -633,15 +633,15 @@ static void drive_internal_state(void* this_ptr, char* pn)
             state_string(obj, temp, &foo_bad);
         }
 
-        for (unsigned int i = 0; i < this->block_count; i++) {
-            if (this->blocks[i].modified) {
+        for (unsigned int i = 0; i < drive->block_count; i++) {
+            if (drive->blocks[i].modified) {
                 sprintf(pathname, "%s/blk%08x.bin", pn, i);
-                state_file(BLOCK_SIZE, pathname, this->blocks[i].data);
-                this->blocks[i].pathindex = pwdindex;
+                state_file(BLOCK_SIZE, pathname, drive->blocks[i].data);
+                drive->blocks[i].pathindex = pwdindex;
             }
-            block_infos[i] = this->blocks[i].pathindex;
+            block_infos[i] = drive->blocks[i].pathindex;
         }
-        state_field(obj, this->block_count * 4, "block_array", block_infos);
+        state_field(obj, drive->block_count * 4, "block_array", block_infos);
     }
 }
 
@@ -652,15 +652,15 @@ static
     int
     drive_internal_init(struct drive_info* info, char* filename, void* info_dat, int drvid)
 {
-    struct drive_internal_info* drv = malloc(sizeof(struct drive_internal_info));
+    struct drive_internal_info* drv = (drive_internal_info *)malloc(sizeof(struct drive_internal_info));
 
     int len = strlen(filename);
     void* pathbase = malloc(len + 1);
-    strcpy(pathbase, filename);
+    strcpy((char *)pathbase, filename);
 
     drv->path_count = 1;
-    drv->paths = malloc(sizeof(char*));
-    drv->paths[0] = pathbase;
+    drv->paths = (char **)malloc(sizeof(char*));
+    drv->paths[0] = (char *)pathbase;
 #ifdef EMSCRIPTEN
     drv->drive_id = drvid;
 #else
@@ -668,11 +668,11 @@ static
 #endif
 
     // Parse
-    struct drive_info_file* internal = info_dat;
+    struct drive_info_file* internal = (drive_info_file *)info_dat;
     drv->block_size = internal->block_size;
     drv->size = internal->size;
     drv->block_count = (internal->block_size + internal->size - 1) / internal->block_size;
-    drv->blocks = calloc(sizeof(struct block_info), drv->block_count);
+    drv->blocks = (block_info *)calloc(sizeof(struct block_info), drv->block_count);
 
     info->data = drv;
     info->read = drive_internal_read;
@@ -770,9 +770,9 @@ struct simple_driver {
     uint8_t** blocks;
 };
 
-static void drive_simple_state(void* this, char* path)
+static void drive_simple_state(void* drive, char* path)
 {
-    UNUSED(this);
+    UNUSED(drive);
     UNUSED(path);
     //DRIVE_FATAL("TODO: Sync driver state\n");
 }
@@ -814,7 +814,7 @@ static int drive_simple_fetch_cache(struct simple_driver* info, void* buffer, dr
 
 static int drive_simple_add_cache(struct simple_driver* info, drv_offset_t offset)
 {
-    void* dest = info->blocks[offset / info->block_size] = malloc(info->block_size);
+    void* dest = info->blocks[offset / info->block_size] = (uint8_t *)malloc(info->block_size);
     lseek(info->fd, offset & (drv_offset_t) ~(info->block_size - 1), SEEK_SET); // Seek to the beginning of the current block
     if ((uint32_t)read(info->fd, dest, info->block_size) != info->block_size)
         DRIVE_FATAL("Unable to read %d bytes from image file\n", (int)info->block_size);
@@ -831,16 +831,16 @@ static inline int drive_simple_write_cache(struct simple_driver* info, void* buf
 
 //#define ALLOW_READWRITE 1
 
-static int drive_simple_write(void* this, void* cb_ptr, void* buffer, uint32_t size, drv_offset_t offset, drive_cb cb)
+static int drive_simple_write(void* drive, void* cb_ptr, void* buffer, uint32_t size, drv_offset_t offset, drive_cb cb)
 {
-    UNUSED(this);
+    UNUSED(drive);
     UNUSED(cb);
     UNUSED(cb_ptr);
 
     if ((size | offset) & 511)
         DRIVE_FATAL("Length/offset must be multiple of 512 bytes\n");
 
-    struct simple_driver* info = this;
+    struct simple_driver* info = (simple_driver *)drive;
 
     drv_offset_t end = size + offset;
     while (offset != end) {
@@ -854,22 +854,22 @@ static int drive_simple_write(void* this, void* cb_ptr, void* buffer, uint32_t s
             if (write(info->fd, buffer, 512) != 512)
                 DRIVE_FATAL("Unable to write 512 bytes to image file\n");
         }
-        (uint8_t *)buffer += 512;
+        //buffer += 512; //XXX: this doesn't work. Was this intended to modify the buffer pointer argument?
         offset += 512;
     }
     return DRIVE_RESULT_SYNC;
 }
 
-static int drive_simple_read(void* this, void* cb_ptr, void* buffer, uint32_t size, drv_offset_t offset, drive_cb cb)
+static int drive_simple_read(void* drive, void* cb_ptr, void* buffer, uint32_t size, drv_offset_t offset, drive_cb cb)
 {
-    UNUSED(this);
+    UNUSED(drive);
     UNUSED(cb);
     UNUSED(cb_ptr);
 
     if ((size | offset) & 511)
         DRIVE_FATAL("Length/offset must be multiple of 512 bytes\n");
 
-    struct simple_driver* info = this;
+    struct simple_driver* info = (simple_driver *)drive;
 
     drv_offset_t end = size + offset;
     while (offset != end) {
@@ -878,7 +878,7 @@ static int drive_simple_read(void* this, void* cb_ptr, void* buffer, uint32_t si
             if (read(info->fd, buffer, 512) != 512)
                 DRIVE_FATAL("Unable to read 512 bytes from image file\n");
         }
-        (uint8_t *)buffer += 512;
+        //buffer += 512; //XXX: this doesn't work. Was this intended to modify the buffer pointer argument?
         offset += 512;
     }
     return DRIVE_RESULT_SYNC;
@@ -899,13 +899,13 @@ int drive_simple_init(struct drive_info* info, char* filename)
         return -1;
     lseek(fd, 0, SEEK_SET);
 
-    struct simple_driver* sync_info = malloc(sizeof(struct simple_driver));
+    struct simple_driver* sync_info = (simple_driver *)malloc(sizeof(struct simple_driver));
     info->data = sync_info;
     sync_info->fd = fd;
     sync_info->image_size = size;
     sync_info->block_size = BLOCK_SIZE;
     sync_info->block_array_size = (size + sync_info->block_size - 1) / sync_info->block_size;
-    sync_info->blocks = calloc(sizeof(uint8_t*), sync_info->block_array_size);
+    sync_info->blocks = (uint8_t **)calloc(sizeof(uint8_t*), sync_info->block_array_size);
 
     sync_info->raw_file_access = info->modify_backing_file;
 
@@ -925,7 +925,7 @@ int drive_simple_init(struct drive_info* info, char* filename)
 
 void drive_destroy_simple(struct drive_info* info)
 {
-    struct simple_driver* simple_info = info->data;
+    struct simple_driver* simple_info = (simple_driver *)info->data;
     for (unsigned int i = 0; i < simple_info->block_array_size; i++)
         free(simple_info->blocks[i]);
     free(simple_info->blocks);

@@ -5,9 +5,13 @@
 
 // TODO: Timing?
 
+#ifndef LIB86CPU
 #include "cpuapi.h"
+#else
+#include "lib86cpu/cpu.h"
+#endif
 #include "devices.h"
-#include "mmio.h"
+#include "io2.h"
 #include "state.h"
 #include "util.h"
 #include <stdint.h>
@@ -96,7 +100,11 @@ static int page_register_offsets[] = {
     8, 6, 7, 5, 8, 8, 8, 4
 };
 
+#ifndef LIB86CPU
 static uint32_t dma_io_readb(uint32_t port)
+#else
+uint8_t dma_io_readb(uint32_t port, void *opaque)
+#endif
 {
     int offset = port >= 0xC0;
     switch (port) {
@@ -210,7 +218,11 @@ static uint32_t dma_io_readb(uint32_t port)
     return -1;
 }
 
+#ifndef LIB86CPU
 static void dma_io_writeb(uint32_t port, uint32_t data)
+#else
+void dma_io_writeb(uint32_t port, const uint8_t data, void *opaque)
+#endif
 {
     int offset = port >= 0xC0;
     switch (port) {
@@ -405,7 +417,7 @@ static void dma_done(int line)
 
 static void dma_run_transfers(void)
 {
-    void* mem = cpu_get_ram_ptr();
+    void* mem = get_ram_ptr(g_cpu);
     for (int i = 0; i < 8; i++) {
         if (dma.status[i >> 2] & (16 << (i & 3))) {
             if (!(dma.mask[i >> 2] & (1 << (i & 3)))) {
@@ -421,17 +433,23 @@ static void dma_run_transfers(void)
                     uint32_t current_addr = ((addr << is16) & 0xFFFF) | dma.addr_high[i];
                     if ((current_addr ^ page) > 4095) {
                         page = current_addr;
+#ifndef LIB86CPU
                         cpu_init_dma(current_addr);
+#endif
                     }
                     if (is_write) // Peripheral writing to memory
+#ifdef LIB86CPU
+                        mem_write_block_phys(g_cpu, current_addr, size, buf);
+#else
                         cpu_write_mem(current_addr, buf, size);
+#endif
                     else {
                         if (is16)
                             *(uint16_t*)buf = *(uint16_t*)((uint8_t *)mem + current_addr);
                         else
                             *(uint8_t*)buf = *(uint8_t*)((uint8_t *)mem + current_addr);
                     }
-                    (uint8_t *)buf += size;
+                    buf = (uint8_t *)buf + size;
                     addr += incdec;
                     ccount--;
                 }
@@ -452,6 +470,7 @@ static void dma_run_transfers(void)
 
 void dma_init(void)
 {
+#ifndef LIB86CPU
     io_register_read(0, 16, dma_io_readb, NULL, NULL);
     io_register_read(0xC0, 32, dma_io_readb, NULL, NULL);
     io_register_write(0, 16, dma_io_writeb, NULL, NULL);
@@ -461,6 +480,7 @@ void dma_init(void)
     io_register_read(0x480, 8, dma_io_readb, NULL, NULL);
     io_register_write(0x80, 16, dma_io_writeb, NULL, NULL);
     io_register_read(0x80, 16, dma_io_readb, NULL, NULL);
+#endif
     io_register_reset(dma_reset);
 
     state_register(dma_state);

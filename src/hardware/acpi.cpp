@@ -4,7 +4,10 @@
 // https://www.intel.com/assets/pdf/specupdate/297738.pdf
 
 #include "devices.h"
-#include "mmio.h"
+#include "io2.h"
+#ifdef LIB86CPU
+#include "lib86cpu/cpu.h"
+#endif
 
 #define ACPI_LOG(x, ...) LOG("ACPI", x, ##__VA_ARGS__)
 #define ACPI_FATAL(x, ...) FATAL("ACPI", x, ##__VA_ARGS__)
@@ -64,7 +67,11 @@ static uint32_t acpi_get_clock(itick_t now)
     return (double)now * (double)ACPI_CLOCK_SPEED / (double)ticks_per_second;
 }
 
+#ifndef LIB86CPU
 static uint32_t acpi_pm_read(uint32_t addr)
+#else
+uint8_t acpi_pm_read(uint32_t addr, void *opaque)
+#endif
 {
     int offset = addr & 3;
     uint32_t result = 0;
@@ -84,15 +91,19 @@ static uint32_t acpi_pm_read(uint32_t addr)
     }
     return result >> (offset * 8);
 }
+#ifndef LIB86CPU
 static void acpi_pm_write(uint32_t addr, uint32_t data)
+#else
+void acpi_pm_write(uint32_t addr, const uint8_t data, void *opaque)
+#endif
 {
     int shift = (addr & 3) * 8;
     switch (addr & 0x3C) {
     case 0:
         if ((addr & 2) == 0) {
             // Writing to this register clears some bits in the status register
-            data = ~data;
-            acpi.pmsts_en &= (data << shift) | (0xFF << (shift ^ 8));
+            uint8_t data1 = ~data;
+            acpi.pmsts_en &= (data1 << shift) | (0xFF << (shift ^ 8));
         } else {
             // Set
             acpi.pmsts_en &= 0xFF << (shift ^ 8);
@@ -113,7 +124,11 @@ static void acpi_pm_write(uint32_t addr, uint32_t data)
         ACPI_FATAL("TODO: power management write: %04x data %04x\n", addr, data);
     }
 }
+#ifndef LIB86CPU
 static uint32_t acpi_sm_read(uint32_t addr)
+#else
+uint8_t acpi_sm_read(uint32_t addr, void *opaque)
+#endif
 {
     switch(addr & 0xF){
         case 0:
@@ -137,7 +152,11 @@ static uint32_t acpi_sm_read(uint32_t addr)
             ACPI_FATAL("TODO: system management read: %04x\n", addr);
     }
 }
+#ifndef LIB86CPU
 static void acpi_sm_write(uint32_t addr, uint32_t data)
+#else
+void acpi_sm_write(uint32_t addr, const uint8_t data, void *opaque)
+#endif
 {
     switch(addr & 0xF){
         case 0:
@@ -161,6 +180,7 @@ static void acpi_remap_pmba(uint32_t io)
 {
     ACPI_LOG("Remapping Power Management I/O ports to %04x\n", io);
     // Try to not conflict with DMA i/o ports
+#ifndef LIB86CPU
     if (acpi.pmba != 0) {
         io_unregister_read(acpi.pmba, 64);
         io_unregister_write(acpi.pmba, 64);
@@ -170,11 +190,23 @@ static void acpi_remap_pmba(uint32_t io)
         io_register_read(acpi.pmba, 64, acpi_pm_read, NULL, NULL);
         io_register_write(acpi.pmba, 64, acpi_pm_write, NULL, NULL);
     }
+#else
+    if (acpi.pmba != 0) {
+        cpu_destroy_io_region(acpi.pmba, 64);
+    }
+    acpi.pmba = io & 0xFFC0;
+    if (io != 0) {
+        if (!LC86_SUCCESS(cpu_add_io_region(acpi.pmba, 64, io_handlers_t{ .fnr8 = acpi_pm_read , .fnw8 = acpi_pm_write }, nullptr))) {
+            ACPI_FATAL("Failed to add io region: acpi.pmba %04x\n", acpi.pmba);
+        }
+    }
+#endif
 }
 static void acpi_remap_smba(uint32_t io)
 {
     ACPI_LOG("Remapping System Management I/O ports to %04x\n", io);
     // Try to not conflict with DMA i/o ports
+#ifndef LIB86CPU
     if (acpi.smba != 0) {
         io_unregister_read(acpi.smba, 64);
         io_unregister_write(acpi.smba, 64);
@@ -184,6 +216,17 @@ static void acpi_remap_smba(uint32_t io)
         io_register_read(acpi.smba, 64, acpi_sm_read, NULL, NULL);
         io_register_write(acpi.smba, 64, acpi_sm_write, NULL, NULL);
     }
+#else
+    if (acpi.smba != 0) {
+        cpu_destroy_io_region(acpi.smba, 64);
+    }
+    acpi.smba = io & 0xFFC0;
+    if (io != 0) {
+        if (!LC86_SUCCESS(cpu_add_io_region(acpi.smba, 64, io_handlers_t{ .fnr8 = acpi_sm_read, .fnw8 = acpi_sm_write }, nullptr))) {
+            ACPI_FATAL("Failed to add io region: acpi.smba %04x\n", acpi.smba);
+        }
+    }
+#endif
 }
 
 // Called when PCI configuration space is modified
@@ -286,7 +329,7 @@ static int acpi_pci_write(uint8_t* ptr, uint8_t addr, uint8_t data)
 }
 
 // ACPI timer
-int acpi_next(itick_t now_tick)
+itick_t acpi_next(itick_t now_tick)
 {
     if (acpi.enabled == 0)
         return -1;
@@ -350,7 +393,7 @@ void acpi_init(struct pc_settings* pc)
     state_register(acpi_state);
 
     // TODO: I randomly selected bus #7. Can we reconfigure this?
-    uint8_t* ptr = pci_create_device(0, 7, 0, acpi_pci_write);
+    uint8_t* ptr = static_cast<uint8_t *>(pci_create_device(0, 7, 0, acpi_pci_write));
     pci_copy_default_configuration(ptr, (void*)acpi_configuration_space, 256);
     // HACK: Pretend system management mode init is already done.
     // We don't actually support SMM yet.

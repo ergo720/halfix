@@ -1,5 +1,5 @@
 // I/O port routines. These are the bare I/O functions; instructions in interpreter.c and string.c will call these functions
-#include "mmio.h"
+#include "io2.h"
 #include "cpu/cpu.h"
 #ifdef INSTRUMENT
 #include "cpu/instrument.h"

@@ -44,6 +44,7 @@ void afree(void* ptr);
 #endif
 
 typedef uint64_t itick_t;
+void timer_init();
 itick_t get_now(void);
 extern uint32_t ticks_per_second;
 

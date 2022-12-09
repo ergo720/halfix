@@ -13,6 +13,8 @@
 #include <sys/types.h>
 #ifdef _MSC_VER
 #include <BaseTsd.h>
+#include <io.h>
+#include <direct.h>
 typedef SSIZE_T ssize_t;
 #else
 #include <unistd.h>
@@ -66,8 +68,8 @@ static uint32_t read32(struct rstream* r)
 }
 static char* readstr(struct rstream* r)
 {
-    int length = strlen((void*)&r->buf[r->pos]) + 1;
-    char* dest = malloc(length);
+    int length = strlen((char *)&r->buf[r->pos]) + 1;
+    char* dest = (char *)malloc(length);
     memcpy(dest, &r->buf[r->pos], length);
     r->pos += length;
     return dest;
@@ -108,7 +110,7 @@ struct wstream {
 };
 static void wstream_init(struct wstream* w, int initial_size)
 {
-    w->buf = malloc(initial_size);
+    w->buf = (uint8_t *)malloc(initial_size);
     w->pos = 0;
     w->bufsize = initial_size;
 }
@@ -119,7 +121,7 @@ static void wstream_destroy(struct wstream* w)
 static void wstream_grow(struct wstream* w)
 {
     w->bufsize <<= 1;
-    w->buf = realloc(w->buf, w->bufsize);
+    w->buf = (uint8_t *)realloc(w->buf, w->bufsize);
 }
 static void write8(struct wstream* w, uint8_t a)
 {
@@ -179,7 +181,7 @@ void state_register(state_handler s)
 #define MAGIC 0xC8C70FF0
 #define VERSION 0
 
-static struct bjson_key_value* get_value(struct bjson_object* o, char* key)
+static struct bjson_key_value* get_value(struct bjson_object* o, const char* key)
 {
     for (unsigned int i = 0; i < o->length; i++) {
         if (!o->keys[i].key)
@@ -191,7 +193,7 @@ static struct bjson_key_value* get_value(struct bjson_object* o, char* key)
 }
 
 // Getters
-struct bjson_data* state_get_mem(struct bjson_object* o, char* key)
+struct bjson_data* state_get_mem(struct bjson_object* o, const char* key)
 {
     struct bjson_key_value* keyval = get_value(o, key);
     if (!keyval || keyval->datatype != TYPE_DATA) {
@@ -200,26 +202,26 @@ struct bjson_data* state_get_mem(struct bjson_object* o, char* key)
     }
     return &keyval->mem_data;
 }
-struct bjson_object* state_get_object(struct bjson_object* o, char* key)
+struct bjson_object* state_get_object(struct bjson_object* o, const char* key)
 {
     struct bjson_key_value* keyval = get_value(o, key);
     if (!keyval || keyval->datatype != TYPE_OBJECT) {
         STATE_LOG("%s is invalid key\n", key);
         return NULL;
     }
-    return keyval->ptr_value;
+    return (bjson_object *)keyval->ptr_value;
 }
 
-static char* dupstr(char* v)
+static char* dupstr(const char* v)
 {
     int len = strlen(v) + 1;
-    char* res = malloc(len + 1);
+    char* res = (char *)malloc(len + 1);
     memcpy(res, v, len);
     return res;
 }
 
 // Setters
-static struct bjson_key_value* set_value(struct bjson_object* o, char* key)
+static struct bjson_key_value* set_value(struct bjson_object* o, const char* key)
 {
     unsigned int i = 0;
     for (; i < o->length; i++) {
@@ -235,14 +237,14 @@ static struct bjson_key_value* set_value(struct bjson_object* o, char* key)
     o->keys[i].key = dupstr(key);
     return &o->keys[i];
 }
-void state_add_mem(struct bjson_object* o, char* key, struct bjson_data* value)
+void state_add_mem(struct bjson_object* o, const char* key, struct bjson_data* value)
 {
     struct bjson_key_value* kv = set_value(o, key);
     kv->datatype = TYPE_DATA;
     kv->mem_data.data = value->data;
     kv->mem_data.length = value->length;
 }
-void state_add_object(struct bjson_object* o, char* key, struct bjson_object* value)
+void state_add_object(struct bjson_object* o, const char* key, struct bjson_object* value)
 {
     struct bjson_key_value* kv = set_value(o, key);
     kv->datatype = TYPE_OBJECT;
@@ -252,9 +254,9 @@ void state_add_object(struct bjson_object* o, char* key, struct bjson_object* va
 // Creates a BJSON object and initializes it.
 struct bjson_object* state_create_bjson_object(int keyvalues)
 {
-    struct bjson_object* obj = malloc(sizeof(struct bjson_object));
+    struct bjson_object* obj = (bjson_object *)malloc(sizeof(struct bjson_object));
     obj->length = keyvalues;
-    obj->keys = calloc(sizeof(struct bjson_key_value), keyvalues);
+    obj->keys = (bjson_key_value *)calloc(sizeof(struct bjson_key_value), keyvalues);
     return obj;
 }
 void state_init_bjson_mem(struct bjson_data* arr, int length)
@@ -265,7 +267,7 @@ void state_init_bjson_mem(struct bjson_data* arr, int length)
 
 // Public API
 static struct bjson_object* global_obj;
-struct bjson_object* state_obj(char* name, int keyvalues)
+struct bjson_object* state_obj(const char* name, int keyvalues)
 {
     if (is_reading)
         return state_get_object(global_obj, name);
@@ -275,7 +277,7 @@ struct bjson_object* state_obj(char* name, int keyvalues)
         return b;
     }
 }
-void state_field(struct bjson_object* cur, int length, char* name, void* data)
+void state_field(struct bjson_object* cur, int length, const char* name, void* data)
 {
     if (is_reading) {
         struct bjson_data* arr = state_get_mem(cur, name);
@@ -293,7 +295,7 @@ void state_field(struct bjson_object* cur, int length, char* name, void* data)
         state_add_mem(cur, name, &arr);
     }
 }
-void state_string(struct bjson_object* cur, char* name, char** val)
+void state_string(struct bjson_object* cur, const char* name, char** val)
 {
     if (is_reading) {
         struct bjson_data* arr = state_get_mem(cur, name);
@@ -309,7 +311,7 @@ void state_string(struct bjson_object* cur, char* name, char** val)
         }
         if (!ok) // Either we hit an unexpected \00 or we didn't hit one at all!
             STATE_FATAL("Invalid string literal");
-        char* dest = malloc(length);
+        char* dest = (char *)malloc(length);
         memcpy(dest, arr->data, length);
         *val = dest;
     } else {
@@ -337,7 +339,7 @@ static void bjson_serialize(struct wstream* w, struct bjson_object* obj)
         struct bjson_key_value* kv = &obj->keys[i];
         writestr(w, kv->key);
         if (kv->datatype == TYPE_OBJECT)
-            bjson_serialize(w, kv->ptr_value);
+            bjson_serialize(w, (bjson_object *)kv->ptr_value);
         else { // Must be TYPE_DATA
             write8(w, kv->datatype);
             write32(w, kv->mem_data.length);
@@ -384,7 +386,7 @@ static void bjson_destroy_object(struct bjson_object* obj)
         struct bjson_key_value* keyvalue = &obj->keys[i];
         free(keyvalue->key);
         if (keyvalue->datatype == TYPE_OBJECT)
-            bjson_destroy_object(keyvalue->ptr_value);
+            bjson_destroy_object((bjson_object *)keyvalue->ptr_value);
         // DATA pointers point to the file itself.
     }
     free(obj->keys);
@@ -392,7 +394,7 @@ static void bjson_destroy_object(struct bjson_object* obj)
 }
 
 static char* global_file_base;
-void state_file(int size, char* name, void* ptr)
+void state_file(int size, const char* name, void* ptr)
 {
     char temp[1000];
     sprintf(temp, "%s" PATHSEP_STR "%s", global_file_base, name);
@@ -430,11 +432,11 @@ static char* normalize(char* a)
     int len = strlen(a);
     char* res;
     if (a[len - 1] == PATHSEP) {
-        res = malloc(len);
+        res = (char *)malloc(len);
         memcpy(res, a, len);
         res[len - 1] = 0;
     } else {
-        res = malloc(len + 1);
+        res = (char *)malloc(len + 1);
         memcpy(res, a, len + 1);
     }
     return res;
@@ -464,7 +466,7 @@ void state_read_from_file(char* fn)
 #endif
 
     struct rstream r;
-    rstream_init(&r, buf);
+    rstream_init(&r, (uint8_t *)buf);
     global_obj = parse_bjson(&r);
     is_reading = 1;
     for (int i = 0; i < state_handler_count; i++)
@@ -541,7 +543,7 @@ void state_mkdir(char* path)
 {
 #ifndef EMSCRIPTEN
 #ifdef _WIN32
-    if (mkdir(path) == -1) {
+    if (_mkdir(path) == -1) {
 #else
     if (mkdir(path, 0777) == -1) {
 #endif

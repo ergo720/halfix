@@ -1,4 +1,8 @@
+#ifndef LIB86CPU
 #include "cpuapi.h"
+#else
+#include "lib86cpu/cpu.h"
+#endif
 #include "devices.h"
 #include "pc.h"
 #include "state.h"
@@ -52,24 +56,24 @@ enum {
 
 static void mouse_move(int clicked);
 
-static void kbd_queue_add(struct kbd_queue* this, uint8_t data)
+static void kbd_queue_add(struct kbd_queue* pthis, uint8_t data)
 {
-    this->data[this->write_pos] = data;
-    this->write_pos = (this->write_pos + 1) & 0xFF;
+    pthis->data[pthis->write_pos] = data;
+    pthis->write_pos = (pthis->write_pos + 1) & 0xFF;
 }
-static int kbd_queue_has(struct kbd_queue* this)
+static int kbd_queue_has(struct kbd_queue* pthis)
 {
-    return this->read_pos != this->write_pos;
+    return pthis->read_pos != pthis->write_pos;
 }
-static uint8_t kbd_queue_get(struct kbd_queue* this)
+static uint8_t kbd_queue_get(struct kbd_queue* pthis)
 {
-    uint8_t data = this->data[this->read_pos];
-    this->read_pos = (this->read_pos + 1) & 0xFF;
+    uint8_t data = pthis->data[pthis->read_pos];
+    pthis->read_pos = (pthis->read_pos + 1) & 0xFF;
     return data;
 }
-static void kbd_queue_clear(struct kbd_queue* this)
+static void kbd_queue_clear(struct kbd_queue* pthis)
 {
-    this->read_pos = this->write_pos = 0;
+    pthis->read_pos = pthis->write_pos = 0;
 }
 
 // Listed in order of priority
@@ -218,7 +222,11 @@ static void kbd_add(int buffer, uint8_t data)
     kbd_refill_output();
 }
 
+#ifndef LIB86CPU
 static uint32_t kbd_read(uint32_t port)
+#else
+uint8_t kbd_read(uint32_t port, void *opaque)
+#endif
 {
     if (port & 4) { // Status register (0x64)
         kbd.status &= ~STATUS_TIME_OUT;
@@ -272,7 +280,11 @@ static void kbd_reset(void)
     kbd_reset_port(1);
 }
 
+#ifndef LIB86CPU
 static void kbd_write(uint32_t port, uint32_t data)
+#else
+void kbd_write(uint32_t port, const uint8_t data, void *opaque)
+#endif
 {
     if (port & 4) { // Command Port (0x64)
         // This port can either run a command on its own or supply the first byte to a multi-byte command.
@@ -538,7 +550,7 @@ static void kbd_write(uint32_t port, uint32_t data)
             kbd_refill_output();
             break;
         case 0xD1: // Controller output gate
-            cpu_set_a20(data >> 1 & 1);
+            cpu_set_a20(g_cpu, data >> 1 & 1, true);
             break;
         case 0xD2:
             kbd_add(KBD_QUEUE, data);
@@ -639,10 +651,12 @@ static void kbd_write(uint32_t port, uint32_t data)
 void kbd_init(void)
 {
     io_register_reset(kbd_reset);
+#ifndef LIB86CPU
     io_register_read(0x60, 1, kbd_read, NULL, NULL);
     io_register_write(0x60, 1, kbd_write, NULL, NULL);
     io_register_read(0x64, 1, kbd_read, NULL, NULL);
     io_register_write(0x64, 1, kbd_write, NULL, NULL);
+#endif
     state_register(kbd_state);
 }
 

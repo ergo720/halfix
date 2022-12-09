@@ -68,7 +68,7 @@ int main(int argc, char** argv)
     UNUSED(argc);
     UNUSED(argv);
 
-    char* configfile = "default.conf";
+    const char* configfile = "default.conf";
     int filesz, realtime = 0;
     FILE* f;
     char* buf;
@@ -117,7 +117,7 @@ parse_config:
         return -1;
     }
     fseek(f, 0, SEEK_END);
-    buf = malloc((filesz = ftell(f)) + 1);
+    buf = (char *)malloc((filesz = ftell(f)) + 1);
     fseek(f, 0, SEEK_SET);
     if (fread(buf, filesz, 1, f) != 1) {
         perror("fread");
@@ -142,6 +142,9 @@ parse_config:
         fprintf(stderr, "VGA memory size (0x%x) too small\n", pc.vga_memory_size);
         return -1;
     }
+
+    timer_init();
+
     if (pc_init(&pc) == -1) {
         fprintf(stderr, "Unable to initialize PC\n");
         return -1;
@@ -151,6 +154,11 @@ parse_config:
     while(1){
         pc_execute();
     }
+#else
+
+#ifdef LIB86CPU
+    pc_run();
+    return 0;
 #else
     // Good for real-world stuff
     while (1) {
@@ -163,5 +171,6 @@ parse_config:
             display_sleep(ms_to_sleep * 5);
         //display_sleep(5);
     }
+#endif
 #endif
 }

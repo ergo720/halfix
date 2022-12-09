@@ -7,9 +7,13 @@
 
 #include "pc.h"
 #include "cpu/instrument.h" // for cpu_instrument_memory_permissions_changed
+#ifndef LIB86CPU
 #include "cpuapi.h"
+#else
+#include "lib86cpu/cpu.h"
+#endif
 #include "devices.h"
-#include "mmio.h"
+#include "io2.h"
 #include "state.h"
 #include "util.h"
 #include <stdlib.h>
@@ -50,7 +54,11 @@ static void pci_mark_rom_area(uint32_t addr, int map)
     pci.rom_area_memory_mapping[(addr - 0xC0000) >> 14] = map;
 }
 
+#ifndef LIB86CPU
 static void pci_write(uint32_t addr, uint32_t data)
+#else
+void pci_write(uint32_t addr, const uint8_t data, void *opaque)
+#endif
 {
     int offset = addr & 3;
     switch (addr & ~3) {
@@ -86,7 +94,11 @@ static void pci_write(uint32_t addr, uint32_t data)
     }
 }
 
+#ifndef LIB86CPU
 static uint32_t pci_read(uint32_t addr)
+#else
+uint8_t pci_read(uint32_t addr, void *opaque)
+#endif
 {
     int offset = addr & 3;
     uint32_t retval = -1;
@@ -121,32 +133,72 @@ static uint32_t pci_read(uint32_t addr)
 // XXX - provide native 16-bit and 32-bit functions instead of just wrapping around the 8-bit versions.
 // Although the PCI spec says that all ports are "Dword-sized," the BochS BIOS reads fractions of registers.
 
+#ifndef LIB86CPU
 static uint32_t pci_read16(uint32_t addr)
+#else
+uint16_t pci_read16(uint32_t addr, void *opaque)
+#endif
 {
+#ifdef LIB86CPU
+    uint16_t result = pci_read(addr, opaque);
+    result |= pci_read(addr + 1, opaque) << 8;
+#else
     uint16_t result = pci_read(addr);
     result |= pci_read(addr + 1) << 8;
+#endif
     return result;
 }
+#ifndef LIB86CPU
 static uint32_t pci_read32(uint32_t addr)
+#else
+uint32_t pci_read32(uint32_t addr, void *opaque)
+#endif
 {
+#ifdef LIB86CPU
+    uint32_t result = pci_read(addr, opaque);
+    result |= pci_read(addr + 1, opaque) << 8;
+    result |= pci_read(addr + 2, opaque) << 16;
+    result |= pci_read(addr + 3, opaque) << 24;
+#else
     uint32_t result = pci_read(addr);
     result |= pci_read(addr + 1) << 8;
     result |= pci_read(addr + 2) << 16;
     result |= pci_read(addr + 3) << 24;
+#endif
     return result;
 }
 
+#ifndef LIB86CPU
 static void pci_write16(uint32_t addr, uint32_t data)
+#else
+void pci_write16(uint32_t addr, const uint16_t data, void *opaque)
+#endif
 {
+#ifdef LIB86CPU
+    pci_write(addr, data & 0xFF, opaque);
+    pci_write(addr + 1, data >> 8 & 0xFF, opaque);
+#else
     pci_write(addr, data & 0xFF);
     pci_write(addr + 1, data >> 8 & 0xFF);
+#endif
 }
+#ifndef LIB86CPU
 static void pci_write32(uint32_t addr, uint32_t data)
+#else
+void pci_write32(uint32_t addr, const uint32_t data, void *opaque)
+#endif
 {
+#ifdef LIB86CPU
+    pci_write(addr, data & 0xFF, opaque);
+    pci_write(addr + 1, data >> 8 & 0xFF, opaque);
+    pci_write(addr + 2, data >> 16 & 0xFF, opaque);
+    pci_write(addr + 3, data >> 24 & 0xFF, opaque);
+#else
     pci_write(addr, data & 0xFF);
     pci_write(addr + 1, data >> 8 & 0xFF);
     pci_write(addr + 2, data >> 16 & 0xFF);
     pci_write(addr + 3, data >> 24 & 0xFF);
+#endif
 }
 
 void* pci_create_device(uint32_t bus, uint32_t device, uint32_t function, pci_conf_write_cb cb)
@@ -160,7 +212,7 @@ void* pci_create_device(uint32_t bus, uint32_t device, uint32_t function, pci_co
     pci.configuration_modification[device << 3 | function] = cb;
     PCI_LOG("Registering device at bus=0 device=%d function=%d\n", device, function);
 
-    return pci.configuration_address_spaces[device << 3 | function] = calloc(1, 256);
+    return pci.configuration_address_spaces[device << 3 | function] = static_cast<uint8_t *>(calloc(1, 256));
 }
 
 void pci_copy_default_configuration(void* confptr, void* area, int size)
@@ -552,11 +604,19 @@ static int pci_82441fx_write(uint8_t* ptr, uint8_t addr, uint8_t data)
 
 static uint8_t* ram; // Doesn't need to be saved since it will be different on each run.
 
+#ifndef LIB86CPU
 static uint32_t mmio_readb(uint32_t addr)
+#else
+uint8_t mmio_readb(uint32_t addr, void *opaque)
+#endif
 {
     return ram[addr];
 }
+#ifndef LIB86CPU
 static void mmio_writeb(uint32_t addr, uint32_t data)
+#else
+void mmio_writeb(uint32_t addr, const uint8_t data, void *opaque)
+#endif
 {
     int map = pci.rom_area_memory_mapping[(addr - 0xC0000) >> 14];
     if (map & 2)
@@ -568,7 +628,7 @@ static void mmio_writeb(uint32_t addr, uint32_t data)
 
 void pci_init_mem(void* a)
 {
-    ram = a;
+    ram = static_cast<uint8_t *>(a);
 }
 
 static void pci_82441fx_init(void)
@@ -576,8 +636,10 @@ static void pci_82441fx_init(void)
     void* ptr = pci_create_device(0, 0, 0, pci_82441fx_write);
     pci_copy_default_configuration(ptr, (void*)configuration_space_82441fx, 128);
 
+#ifndef LIB86CPU
     io_register_mmio_read(0xC0000, 0x40000, mmio_readb, NULL, NULL);
     io_register_mmio_write(0xC0000, 0x40000, mmio_writeb, NULL, NULL);
+#endif
 }
 
 static void pci_82441fx_reset(void)
@@ -912,12 +974,20 @@ static const uint8_t configuration_space_82371sb_ide[64] = {
     0, 0, 0, 0, 0, 0, 0, 0, // 48
     0, 0, 0, 0, 0, 0, 0, 0 // 56
 };
+#ifndef LIB86CPU
 static void pci_82371sb_ide_io_write_handler(uint32_t port, uint32_t data)
+#else
+void pci_82371sb_ide_io_write_handler(uint32_t port, const uint8_t data, void *opaque)
+#endif
 {
     ide_write_prdt(port, data);
 }
 
+#ifndef LIB86CPU
 static uint32_t pci_82371sb_ide_io_read_handler(uint32_t port)
+#else
+uint8_t pci_82371sb_ide_io_read_handler(uint32_t port, void *opaque)
+#endif
 {
     return ide_read_prdt(port);
 }
@@ -934,10 +1004,17 @@ static void pci_82371sb_ide_remap(uint32_t old)
 
     base_addr &= ~15; // Must be 16 byte aligned
 
+#ifndef LIB86CPU
     io_unregister_read(old, 16);
     io_unregister_write(old, 16);
     io_register_read(base_addr, 16, pci_82371sb_ide_io_read_handler, NULL, NULL);
     io_register_write(base_addr, 16, pci_82371sb_ide_io_write_handler, NULL, NULL);
+#else
+    cpu_destroy_io_region(old, 16);
+    if (!LC86_SUCCESS(cpu_add_io_region(base_addr, 16, io_handlers_t{ .fnr8 = pci_82371sb_ide_io_read_handler, .fnw8 = pci_82371sb_ide_io_write_handler }, nullptr))) {
+        PCI_FATAL("Failed to add io region: base_addr %04x\n", base_addr);
+    }
+#endif
 }
 
 static int pci_82371sb_ide_write(uint8_t* ptr, uint8_t addr, uint8_t data)
@@ -1216,7 +1293,7 @@ static int pci_82371sb_ide_write(uint8_t* ptr, uint8_t addr, uint8_t data)
 
 static void pci_82371sb_ide_init(void)
 {
-    uint8_t* ptr = pci_create_device(0, 1, 1, pci_82371sb_ide_write);
+    uint8_t* ptr = static_cast<uint8_t *>(pci_create_device(0, 1, 1, pci_82371sb_ide_write));
     pci_copy_default_configuration(ptr, (void*)configuration_space_82371sb_ide, 64);
 
     // ATA0 and ATA1 are enabled by default
@@ -1230,7 +1307,7 @@ static void pci_82371sb_ide_init(void)
 }
 static void pci_82371sb_ide_reset(void)
 {
-    uint8_t* ptr = pci_get_configuration_ptr(0, 1, 1);
+    uint8_t* ptr = static_cast<uint8_t *>(pci_get_configuration_ptr(0, 1, 1));
     pci_copy_default_configuration(ptr, (void*)configuration_space_82371sb_ide, 64);
 
     ptr[0x41] = 0x80;
@@ -1299,8 +1376,10 @@ void pci_init(struct pc_settings* pc)
     if (!pc->pci_enabled)
         return;
 
+#ifndef LIB86CPU
     io_register_read(0xCF8, 8, pci_read, pci_read16, pci_read32);
     io_register_write(0xCF8, 8, pci_write, pci_write16, pci_write32);
+#endif
     state_register(pci_state);
     io_register_reset(pci_reset);
 

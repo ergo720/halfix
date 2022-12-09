@@ -2,7 +2,7 @@
 #define DEVICES_H
 
 // Master header file for all devices
-#include "mmio.h"
+#include "io2.h"
 #include "pc.h"
 #include "util.h"
 
@@ -24,7 +24,11 @@ void cmos_set(uint8_t where, uint8_t data);
 uint8_t cmos_get(uint8_t where);
 void pic_raise_irq(int);
 void pic_lower_irq(int);
+#ifdef LIB86CPU
+uint16_t pic_get_interrupt();
+#else
 uint8_t pic_get_interrupt(void);
+#endif
 int pic_has_interrupt(void);
 void kbd_add_key(uint8_t data);
 void kbd_mouse_down(int left, int center, int right);
@@ -38,11 +42,11 @@ void* vga_get_ptr(void);
 int cmos_clock(itick_t now);
 int pit_timer(itick_t now);
 
-int cmos_next(itick_t now);
-int pit_next(itick_t now);
-int apic_next(itick_t now);
+itick_t cmos_next(itick_t now);
+itick_t pit_next(itick_t now);
+itick_t apic_next(itick_t now);
 int floppy_next(itick_t now);
-int acpi_next(itick_t now);
+itick_t acpi_next(itick_t now);
 
 void dma_raise_dreq(int);
 // DMA handlers

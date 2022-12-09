@@ -5,10 +5,13 @@
 #include "display.h"
 #include "state.h"
 #include <stdlib.h>
+#ifdef _WIN32
+#include "Windows.h"
+#endif
 
 //#define REALTIME_TIMING
 
-#ifdef REALTIME_TIMING
+#if defined (REALTIME_TIMING) && defined(__GNUC__)
 #include <sys/time.h>
 #endif
 
@@ -21,13 +24,13 @@ static void** qmalloc_slabs = NULL;
 static int qmalloc_slabs_size = 0;
 static void qmalloc_slabs_resize(void)
 {
-    qmalloc_slabs = realloc(qmalloc_slabs, qmalloc_slabs_size * sizeof(void*));
+    qmalloc_slabs = (void **)realloc(qmalloc_slabs, qmalloc_slabs_size * sizeof(void*));
 }
 void qmalloc_init(void)
 {
     if (qmalloc_slabs == NULL) {
         qmalloc_slabs_size = 1;
-        qmalloc_slabs = malloc(1);
+        qmalloc_slabs = (void **)malloc(1);
         qmalloc_slabs_resize();
     }
     qmalloc_data = malloc(QMALLOC_SIZE);
@@ -73,13 +76,15 @@ void* aalloc(int size, int align)
 {
     int adjusted = align - 1;
     void *actual = calloc(1, sizeof(void *) + size + adjusted);
-    struct aalloc_info *ai = (uint8_t *)((void*)((uintptr_t)((uint8_t *)actual + sizeof(void*) + adjusted) & ~adjusted)) - sizeof(void *);
+    uint8_t *a = (uint8_t *)actual + sizeof(void *) + adjusted;
+    uintptr_t b = (uintptr_t)a & ~adjusted;
+    struct aalloc_info *ai = (aalloc_info *)((uint8_t *)b - sizeof(void *));
     ai->actual_ptr = actual;
     return ((uint8_t *)ai) + sizeof(void *);
 }
 void afree(void* ptr)
 {
-    struct aalloc_info* a = (uint8_t *)ptr - 1;
+    struct aalloc_info* a = (aalloc_info *)(uint8_t *)ptr - 1;
     free(a->actual_ptr);
 }
 
@@ -90,7 +95,8 @@ void afree(void* ptr)
 uint32_t ticks_per_second = 50000000;
 #else
 uint32_t ticks_per_second = 1000000;
-itick_t base;
+static itick_t exec_time; // total cpu execution time in us
+itick_t base = 0;
 #endif
 
 void set_ticks_per_second(uint32_t value)
@@ -106,19 +112,48 @@ void util_state(void)
     state_field(obj, 8, "tick_base", &tick_base);
 }
 
+#ifdef _WIN32
+static itick_t host_freq;
+
+void timer_init()
+{
+    LARGE_INTEGER freq, now;
+    QueryPerformanceFrequency(&freq);
+    host_freq = freq.QuadPart;
+    QueryPerformanceCounter(&now);
+    base = now.QuadPart;
+}
+#elif __linux__
+void timer_init()
+{
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    base = (itick_t)tv.tv_sec * (itick_t)1000000 + (itick_t)tv.tv_usec;
+}
+#endif
+
 // "Constant" source of ticks, in either usec or CPU instructions
 itick_t get_now(void)
 {
 #ifndef REALTIME_TIMING
     return tick_base + cpu_get_cycles();
 #else
-    // XXX
+#ifdef __linux__
     struct timeval tv;
     gettimeofday(&tv, NULL);
     itick_t hi = (itick_t)tv.tv_sec * (itick_t)1000000 + (itick_t)tv.tv_usec;
-    if (!base)
-        base = hi;
-    return hi - base;
+    return exec_time += (hi - base);
+#elif _WIN32
+    LARGE_INTEGER now;
+    QueryPerformanceCounter(&now);
+    itick_t elapsed_us = (itick_t)(now.QuadPart) - base;
+    base = now.QuadPart;
+    elapsed_us *= 1000000000;
+    elapsed_us /= host_freq;
+    return exec_time += (elapsed_us / 1000);
+#else
+#error don't know how to implement get_now function on this OS
+#endif
 #endif
 }
 

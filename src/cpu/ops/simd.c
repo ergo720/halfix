@@ -6,7 +6,7 @@
 #include "cpu/cpu.h"
 #include "cpu/fpu.h"
 #include "cpu/instrument.h"
-#include "mmio.h"
+#include "io2.h"
 #include <string.h>
 #define EXCEPTION_HANDLER return 1
 

@@ -137,14 +137,18 @@ static uint8_t cmos_ram_read(uint8_t addr)
     }
     CMOS_FATAL("should not be here\n");
 }
+#ifndef LIB86CPU
 static uint32_t cmos_readb(uint32_t port)
+#else
+uint8_t cmos_readb(uint32_t port, void *opaque)
+#endif
 {
     switch (port & 1) {
     case 0:
         //CMOS_FATAL("Unknown readb 70h\n");
 
-        // Windows XP reads from this register to determine which port it should write dummy values to. 
-        return 0xFF; 
+        // Windows XP reads from this register to determine which port it should write dummy values to.
+        return 0xFF;
     case 1:
         //if(cmos.addr == 0xFF) cpu_add_now(100000);
         if (cmos.addr <= 0x0D)
@@ -236,7 +240,11 @@ static inline void cmos_ram_write(uint8_t data)
     cmos.now = mktime(now);
 }
 
+#ifndef LIB86CPU
 static void cmos_writeb(uint32_t port, uint32_t data)
+#else
+void cmos_writeb(uint32_t port, const uint8_t data, void *opaque)
+#endif
 {
     switch (port & 1) {
     case 0:
@@ -323,7 +331,7 @@ int cmos_clock(itick_t now)
     }
     return 0;
 }
-int cmos_next(itick_t now)
+itick_t cmos_next(itick_t now)
 {
     cmos_clock(now);
     return cmos.last_called + cmos.period - now;
@@ -348,8 +356,10 @@ static void cmos_reset(void)
 
 void cmos_init(uint64_t now)
 {
+#ifndef LIB86CPU
     io_register_read(0x70, 2, cmos_readb, NULL, NULL);
     io_register_write(0x70, 2, cmos_writeb, NULL, NULL);
+#endif
     state_register(cmos_state);
     io_register_reset(cmos_reset);
     if(now == 0) now = time(NULL);

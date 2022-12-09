@@ -1,8 +1,13 @@
 #include "pc.h"
+#ifndef LIB86CPU
 #include "cpuapi.h"
+#else
+#include "lib86cpu/cpu.h"
+#include <thread>
+#endif
 #include "devices.h"
 #include "display.h"
-#include "mmio.h"
+#include "io2.h"
 #include "state.h"
 #include "util.h"
 
@@ -121,7 +126,11 @@ static int a20 = 2;
 static char bios_data[2][101];
 static int bios_ptr[2];
 
+#ifndef LIB86CPU
 static void bios_writeb(uint32_t port, uint32_t data)
+#else
+void bios_writeb(uint32_t port, const uint8_t data, void *opaque)
+#endif
 {
     int id;
     switch (port) {
@@ -140,7 +149,7 @@ static void bios_writeb(uint32_t port, uint32_t data)
         }
         break;
     case 0x8900: {
-        static const unsigned char shutdown[8] = "Shutdown";
+        static const char *shutdown = "Shutdown";
         static int idx = 0;
         if (data == shutdown[idx++]) {
             if (idx == 8) {
@@ -154,7 +163,7 @@ static void bios_writeb(uint32_t port, uint32_t data)
     }
     case 0x92:
         a20 = data;
-        cpu_set_a20(a20 >> 1 & 1);
+        cpu_set_a20(g_cpu, a20 >> 1 & 1, true);
         break;
     case 0x500:
     case 0x400:
@@ -175,12 +184,28 @@ static void bios_writeb(uint32_t port, uint32_t data)
     }
 }
 
+#ifdef LIB86CPU
+void bios_writew(uint32_t port, const uint16_t data, void *opaque)
+{
+    bios_writeb(port, static_cast<uint8_t>(data), opaque);
+}
+
+void bios_writed(uint32_t port, const uint32_t data, void *opaque)
+{
+    bios_writeb(port, data, opaque);
+}
+#endif
+
 void pc_set_a20(int state)
 {
     a20 = state << 1;
 }
 uint8_t p61_data;
+#ifndef LIB86CPU
 static uint32_t bios_readb(uint32_t port)
+#else
+uint8_t bios_readb(uint32_t port, void *opaque)
+#endif
 {
     switch (port) {
     case 0xB3:
@@ -196,13 +221,34 @@ static uint32_t bios_readb(uint32_t port)
         return -1;
     }
 }
+
+#ifdef LIB86CPU
+uint16_t bios_readw(uint32_t port, void *opaque)
+{
+    return bios_readb(port, opaque);
+}
+
+uint32_t bios_readd(uint32_t port, void *opaque)
+{
+    return bios_readb(port, opaque);
+}
+#endif
+
+#ifndef LIB86CPU
 static void default_mmio_writeb(uint32_t a, uint32_t b)
+#else
+void default_mmio_writeb(uint32_t a, const uint8_t b, void *opaque)
+#endif
 {
     UNUSED(a);
     UNUSED(b);
     LOG("PC", "Writing 0x%x to address 0x%x\n", b, a);
 }
+#ifndef LIB86CPU
 static uint32_t default_mmio_readb(uint32_t a)
+#else
+uint8_t default_mmio_readb(uint32_t a, void *opaque)
+#endif
 {
     UNUSED(a);
     LOG("PC", "Reading from address 0x%x\n", a);
@@ -217,12 +263,17 @@ static uint32_t default_mmio_readb(uint32_t a)
 // XXX Very very bad hack to make timing work (see util.c)
 void util_state(void);
 
-int pc_init(struct pc_settings* pc)
+int pc_init(struct pc_settings *pc)
 {
+#ifdef LIB86CPU
+    if (cpu_init(pc) == -1)
+        return -1;
+#else
     if (cpu_init() == -1)
         return -1;
     cpu_set_cpuid(&pc->cpu);
     io_init();
+#endif
     dma_init();
     cmos_init(pc->current_time);
     pc_init_cmos(pc); // must come before floppy initalization b/c reg 0x14
@@ -239,12 +290,155 @@ int pc_init(struct pc_settings* pc)
     ioapic_init(pc);
     acpi_init(pc);
 
+#ifndef LIB86CPU
     //cpu_set_a20(0); // causes code to be prefetched from 0xFFEFxxxx at boot
     cpu_set_a20(1);
+#endif
 
     io_trigger_reset();
 
     display_init();
+
+#ifdef LIB86CPU
+
+    if (!LC86_SUCCESS(cpu_add_io_region(0xB3, 1, io_handlers_t{ .fnr8 = bios_readb }, nullptr))) {
+        return -1;
+    }
+    if (!LC86_SUCCESS(cpu_add_io_region(0x511, 1, io_handlers_t{ .fnr8 = bios_readb }, nullptr))) {
+        return -1;
+    }
+    if (!LC86_SUCCESS(cpu_add_io_region(0x510, 1, io_handlers_t{ .fnw16 = bios_writew }, nullptr))) {
+        return -1;
+    }
+    if (!LC86_SUCCESS(cpu_add_io_region(0x8900, 1, io_handlers_t{ .fnw8 = bios_writeb }, nullptr))) {
+        return -1;
+    }
+
+    if (!LC86_SUCCESS(cpu_add_io_region(0x400, 4, io_handlers_t{ .fnw8 = bios_writeb }, nullptr))) {
+        return -1;
+    }
+    if (!LC86_SUCCESS(cpu_add_io_region(0x500, 1, io_handlers_t{ .fnw8 = bios_writeb }, nullptr))) {
+        return -1;
+    }
+
+    if (!LC86_SUCCESS(cpu_add_io_region(0x378, 8, io_handlers_t{ .fnr8 = bios_readb, .fnw8 = bios_writeb }, nullptr))) {
+        return -1;
+    }
+    if (!LC86_SUCCESS(cpu_add_io_region(0x278, 8, io_handlers_t{ .fnr8 = bios_readb, .fnw8 = bios_writeb }, nullptr))) {
+        return -1;
+    }
+    if (!LC86_SUCCESS(cpu_add_io_region(0x3f8, 8, io_handlers_t{ .fnr8 = bios_readb, .fnw8 = bios_writeb }, nullptr))) {
+        return -1;
+    }
+    if (!LC86_SUCCESS(cpu_add_io_region(0x2f8, 8, io_handlers_t{ .fnr8 = bios_readb, .fnw8 = bios_writeb }, nullptr))) {
+        return -1;
+    }
+    if (!LC86_SUCCESS(cpu_add_io_region(0x3e8, 8, io_handlers_t{ .fnr8 = bios_readb, .fnw8 = bios_writeb }, nullptr))) {
+        return -1;
+    }
+    if (!LC86_SUCCESS(cpu_add_io_region(0x2e8, 8, io_handlers_t{ .fnr8 = bios_readb, .fnw8 = bios_writeb }, nullptr))) {
+        return -1;
+    }
+    if (!LC86_SUCCESS(cpu_add_io_region(0x92, 1, io_handlers_t{ .fnr8 = bios_readb, .fnw8 = bios_writeb }, nullptr))) {
+        return -1;
+    }
+    if (!LC86_SUCCESS(cpu_add_io_region(0x510, 2, io_handlers_t{ .fnr8 = bios_readb, .fnw8 = bios_writeb }, nullptr))) {
+        return -1;
+    }
+
+    if (!LC86_SUCCESS(cpu_add_io_region(0x3e0, 8, io_handlers_t{ .fnr8 = bios_readb, .fnw8 = bios_writeb }, nullptr))) {
+        return -1;
+    }
+    if (!LC86_SUCCESS(cpu_add_io_region(0x360, 16, io_handlers_t{ .fnr8 = bios_readb, .fnw8 = bios_writeb }, nullptr))) {
+        return -1;
+    }
+    if (!LC86_SUCCESS(cpu_add_io_region(0x1e0, 16, io_handlers_t{ .fnr8 = bios_readb, .fnw8 = bios_writeb }, nullptr))) {
+        return -1;
+    }
+    if (!LC86_SUCCESS(cpu_add_io_region(0x160, 16, io_handlers_t{ .fnr8 = bios_readb, .fnw8 = bios_writeb }, nullptr))) {
+        return -1;
+    }
+
+    if (!LC86_SUCCESS(cpu_add_io_region(0x2f0, 8, io_handlers_t{ .fnw8 = bios_writeb }, nullptr))) {
+        return -1;
+    }
+    if (!LC86_SUCCESS(cpu_add_io_region(0x270, 16, io_handlers_t{ .fnr8 = bios_readb }, nullptr))) {
+        return -1;
+    }
+    if (!LC86_SUCCESS(cpu_add_io_region(0x6f0, 8, io_handlers_t{ .fnw8 = bios_writeb }, nullptr))) {
+        return -1;
+    }
+    if (!LC86_SUCCESS(cpu_add_io_region(0x420, 2, io_handlers_t{ .fnr8 = bios_readb }, nullptr))) {
+        return -1;
+    }
+    if (!LC86_SUCCESS(cpu_add_io_region(0x4a0, 2, io_handlers_t{ .fnr8 = bios_readb }, nullptr))) {
+        return -1;
+    }
+    if (!LC86_SUCCESS(cpu_add_io_region(0xa78, 2, io_handlers_t{ .fnw8 = bios_writeb }, nullptr))) {
+        return -1;
+    }
+
+    if (!LC86_SUCCESS(cpu_add_io_region(0x22, 4, io_handlers_t{ .fnr8 = bios_readb, .fnw8 = bios_writeb }, nullptr))) {
+        return -1;
+    }
+
+    if (!pc->pci_enabled) {
+        io_handlers_t pci_handlers{ .fnr8 = bios_readb, .fnr16 = bios_readw, .fnr32 = bios_readd,
+    .fnw8 = bios_writeb, .fnw16 = bios_writew, .fnw32 = bios_writed };
+        if (!LC86_SUCCESS(cpu_add_io_region(0xCF8, 8, pci_handlers, nullptr))) {
+            return -1;
+        }
+    }
+
+    if (!pc->apic_enabled) {
+        if (!LC86_SUCCESS(cpu_add_mmio_region(0xFEE00000, 1 << 20, io_handlers_t{ .fnr8 = default_mmio_readb, .fnw8 = default_mmio_writeb }, nullptr))) {
+            return -1;
+        }
+    }
+
+    // Check writes to ROM
+    if (!pc->pci_enabled) {
+        // PCI can control ROM areas using the Programmable Attribute Map Registers, so this will be handled there
+        if (!LC86_SUCCESS(cpu_add_mmio_region(0xC0000, 0x40000, io_handlers_t{ .fnw8 = default_mmio_writeb }, nullptr))) {
+            return -1;
+        }
+    }
+
+    // The rest is just CPU initialization
+    firmware_memory_size = pc->memory_size;
+    if (!LC86_SUCCESS(cpu_add_ram_region(0, pc->memory_size))) {
+        return -1;
+    }
+
+    if (pc->pci_enabled) {
+        pci_init_mem(get_ram_ptr(g_cpu));
+    }
+
+    // Check if BIOS and VGABIOS have sane values
+    if (((uintptr_t)pc->bios.data | (uintptr_t)pc->vgabios.data) & 0xFFF) {
+        fprintf(stderr, "BIOS and VGABIOS need to be aligned on a 4k boundary\n");
+        return -1;
+    }
+    if (!pc->bios.length || !pc->vgabios.length) {
+        fprintf(stderr, "BIOS/VGABIOS length is zero\n");
+        return 0;
+    }
+
+    if (!LC86_SUCCESS(cpu_add_rom_region(0x100000 - pc->bios.length, pc->bios.length, static_cast<uint8_t *>(pc->bios.data)))) {
+        return -1;
+    }
+    if (!LC86_SUCCESS(cpu_add_rom_region(-pc->bios.length, pc->bios.length, static_cast<uint8_t *>(pc->bios.data)))) {
+        return -1;
+    }
+    if (!pc->pci_vga_enabled) {
+        if (!LC86_SUCCESS(cpu_add_rom_region(0xC0000, pc->vgabios.length, static_cast<uint8_t *>(pc->vgabios.data)))) {
+            return -1;
+        }
+    }
+
+    state_register(util_state);
+
+#else
 
     //io_register_read(0x61, 1, bios_readb, NULL, NULL);
     io_register_read(0xB3, 1, bios_readb, NULL, NULL);
@@ -352,12 +546,13 @@ int pc_init(struct pc_settings* pc)
 #ifdef SAVESTATE
     state_read_from_file("savestates/halfix_state/");
 #endif
+#endif
 
     return 0;
 }
-static uint32_t devices_get_next_raw(itick_t now)
+static itick_t devices_get_next_raw(itick_t now)
 {
-    uint32_t next[4], min = -1;
+    itick_t next[4], min = -1;
     next[0] = cmos_next(now);
     next[1] = pit_next(now);
     next[2] = apic_next(now);
@@ -369,12 +564,14 @@ static uint32_t devices_get_next_raw(itick_t now)
     return min;
 }
 
-static uint32_t devices_get_next(itick_t now, int* devices_need_servicing)
+static itick_t devices_get_next(itick_t now, int* devices_need_servicing)
 {
-    int min = devices_get_next_raw(now);
+    itick_t min = devices_get_next_raw(now);
+#ifndef LIB86CPU
     if (cpu_get_exit_reason() == EXIT_STATUS_HLT)
         return min;
-    if ((unsigned int)min > 200000) {
+#endif
+    if (min > 200000) {
         if(devices_need_servicing)
             *devices_need_servicing = min - 200000;
         return 200000;
@@ -404,7 +601,38 @@ void pc_set_fast(int yes){
     fast = yes;
 }
 #endif
-int pc_execute(void)
+
+#ifdef LIB86CPU
+itick_t next_deadline;
+
+uint32_t pc_run()
+{
+    next_deadline = devices_get_next(get_now(), nullptr);
+    std::thread(pc_execute).detach();
+    lc86_status code = cpu_run(g_cpu);
+    printf("Emulation terminated with status %d. The error was \"%s\"\n", code, get_last_error().c_str());
+    cpu_free(g_cpu);
+    return 0;
+}
+
+void pc_execute()
+{
+    while (true) {
+        while (get_now() < next_deadline) {} // busy wait
+
+        // the functions below updat device states that can be accessed by the cpu with pmio or mmio, so the cpu must be stopped first
+        cpu_pause(g_cpu, true);
+
+        // update our screen and vga here
+        vga_update();
+        display_handle_events();
+
+        // this updates the states of cmos, pit, apic and acpi, and calculates the first occurring deadline among them
+        next_deadline = devices_get_next(get_now(), nullptr);
+        cpu_resume(g_cpu);
+    }
+#else
+int pc_execute()
 {
     // This function is called repeatedly.
     int frames = 10, cycles_to_run, cycles_run, exit_reason, devices_need_servicing = 0;
@@ -419,6 +647,7 @@ int pc_execute(void)
     // Call the callback if needed, for async drive cases
     drive_check_complete();
 
+#if 0
     sync++;
     if (!drive_async_event_in_progress() && (cpu_get_cycles() - last) > INSNS_PER_FRAME) {
 // Verify that timing is identical
@@ -431,6 +660,8 @@ int pc_execute(void)
         sync = 0;
         last = cpu_get_cycles();
     }
+#endif
+
     do {
         now = get_now();
         cycles_to_run = devices_get_next(now, &devices_need_servicing);
@@ -482,4 +713,5 @@ int pc_execute(void)
 #endif
     } while (frames--);
     return 0;
+#endif
 }

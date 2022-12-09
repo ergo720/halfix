@@ -42,12 +42,12 @@ static int load_file(struct loaded_file* lf, char* path)
 struct ini_field {
     char* name;
     char* data;
-    void* next;
+    ini_field* next;
 };
 struct ini_section {
     char* name;
     struct ini_field* fields;
-    void* next;
+    ini_section* next;
 };
 
 enum {
@@ -61,7 +61,7 @@ enum {
 static inline char* slice_string(char* y, int start, int end)
 {
     int length = end - start;
-    char* result = malloc(length + 1);
+    char* result = (char *)malloc(length + 1);
     memcpy(result, y + start, length);
     result[length] = 0;
     return result;
@@ -72,7 +72,7 @@ static struct ini_section* ini_parse(char* x)
     int state = STATE_DEFAULT,
         length = strlen(x),
         i = 0, strstart = 0, strend = 0, include_whitespace = 0;
-    struct ini_section *result = calloc(1, sizeof(struct ini_section)), *head = result;
+    struct ini_section *result = (ini_section *)calloc(1, sizeof(struct ini_section)), *head = result;
     struct ini_field* current_field = NULL;
     while (i < length) {
         int c = x[i++];
@@ -97,7 +97,7 @@ static struct ini_section* ini_parse(char* x)
         case STATE_SECTION:
             if (c == ']') {
                 // Add an element to our linked list.
-                struct ini_section* sect = calloc(1, sizeof(struct ini_section));
+                struct ini_section* sect = (ini_section *)calloc(1, sizeof(struct ini_section));
                 sect->name = slice_string(x, strstart, i - 1);
                 head->next = sect;
                 head = sect;
@@ -107,7 +107,7 @@ static struct ini_section* ini_parse(char* x)
         case STATE_KEY:
             // keystart[\s]=[\s+]
             if (c == '=') {
-                struct ini_field *field = calloc(1, sizeof(struct ini_field)), *temp;
+                struct ini_field *field = (ini_field *)calloc(1, sizeof(struct ini_field)), *temp;
                 field->name = slice_string(x, strstart, strend);
                 temp = head->fields;
                 head->fields = field;
@@ -151,7 +151,7 @@ struct ini_enum {
     int value;
 };
 
-static struct ini_section* get_section(struct ini_section* sect, char* name)
+static struct ini_section* get_section(struct ini_section* sect, const char* name)
 {
     while (sect) {
         if (sect->name) {
@@ -162,7 +162,7 @@ static struct ini_section* get_section(struct ini_section* sect, char* name)
     }
     return NULL;
 }
-static char* get_field_string(struct ini_section* sect, char* name)
+static char* get_field_string(struct ini_section* sect, const char* name)
 {
     struct ini_field* f = sect->fields;
     while (f) {
@@ -172,7 +172,7 @@ static char* get_field_string(struct ini_section* sect, char* name)
     }
     return NULL;
 }
-static int get_field_enum(struct ini_section* sect, char* name, const struct ini_enum* vals, int def)
+static int get_field_enum(struct ini_section* sect, const char* name, const struct ini_enum* vals, int def)
 {
     char* x = get_field_string(sect, name);
     if (!x)
@@ -186,7 +186,7 @@ static int get_field_enum(struct ini_section* sect, char* name, const struct ini
     printf("Unknown value: %s\n", name);
     return def;
 }
-static int get_field_int(struct ini_section* sect, char* name, int def)
+static int get_field_int(struct ini_section* sect, const char* name, int def)
 {
     char* str = get_field_string(sect, name);
     int res = 0, i = 0;
@@ -227,7 +227,7 @@ static int get_field_int(struct ini_section* sect, char* name, int def)
     }
     return res;
 }
-static int get_field_long(struct ini_section* sect, char* name, int def)
+static int get_field_long(struct ini_section* sect, const char* name, int def)
 {
     char* str = get_field_string(sect, name);
     uint64_t res = 0;
@@ -342,7 +342,7 @@ static char* dupstr(char* src)
     if (!src)
         return NULL;
     int len = strlen(src);
-    char* res = malloc(len + 1);
+    char* res = (char *)malloc(len + 1);
     strcpy(res, src);
     return res;
 }
@@ -350,6 +350,9 @@ static char* dupstr(char* src)
 #ifdef EMSCRIPTEN
 EMSCRIPTEN_KEEPALIVE
 #endif
+
+#define parsing_failed()     free_ini(global); return -1
+
 int parse_cfg(struct pc_settings* pc, char* data)
 {
     struct ini_section* global = ini_parse(data);
@@ -358,12 +361,12 @@ int parse_cfg(struct pc_settings* pc, char* data)
     char *bios = get_field_string(global, "bios"), *vgabios = get_field_string(global, "vgabios");
     if (!bios || !vgabios) {
         fprintf(stderr, "No BIOS/VGABIOS!\n");
-        goto fail;
+        parsing_failed();
     }
 
     if (load_file(&pc->bios, bios) || load_file(&pc->vgabios, vgabios)) {
         fprintf(stderr, "Unable to load BIOS/VGABIOS image\n");
-        goto fail;
+        parsing_failed();
     }
 
     // Determine memory size
@@ -389,7 +392,7 @@ int parse_cfg(struct pc_settings* pc, char* data)
     res |= parse_disk(&pc->drives[3], get_section(global, "ata1-slave"), 3);
     if (res) {
         fprintf(stderr, "Unable to initialize disk drive images\n");
-        goto fail;
+        parsing_failed();
     }
 
     // Now check for floppy drive information
@@ -397,7 +400,7 @@ int parse_cfg(struct pc_settings* pc, char* data)
     res |= parse_disk(&pc->floppy_drives[1], get_section(global, "fdb"), 5);
     if (res) {
         fprintf(stderr, "Unable to initialize floppy drive images\n");
-        goto fail;
+        parsing_failed();
     }
 
     // Check for network
@@ -490,6 +493,7 @@ int parse_cfg(struct pc_settings* pc, char* data)
         pc->boot_sequence[2] = get_field_enum(boot, "c", boot_types, BOOT_FLOPPY);
     }
 
+#ifndef LIB86CPU
     // Get CPU information
     struct ini_section* cpu = get_section(global, "cpu");
     if (cpu == NULL) {
@@ -497,12 +501,10 @@ int parse_cfg(struct pc_settings* pc, char* data)
     } else {
         pc->cpu.cpuid_limit_winnt = get_field_int(cpu, "cpuid_limit_winnt", 0);
     }
+#endif
 
     UNUSED(get_section);
 
     free_ini(global);
     return 0;
-fail:
-    free_ini(global);
-    return -1;
 }

@@ -7,7 +7,7 @@
 
 #include "devices.h"
 #include "drive.h"
-#include "mmio.h"
+#include "io2.h"
 #include "pc.h"
 #include "util.h"
 #include <stdint.h>
@@ -234,7 +234,11 @@ static inline void reset_out_fifo(int size)
     }
 }
 
+#ifndef LIB86CPU
 static uint32_t fdc_read(uint32_t port)
+#else
+uint8_t fdc_read(uint32_t port, void *opaque)
+#endif
 {
     switch (port) {
     case 0x3F0: // Status register A
@@ -345,7 +349,11 @@ static void fdc_idle(void)
     reset_cmd_fifo();
 }
 
+#ifndef LIB86CPU
 static void fdc_write(uint32_t port, uint32_t data)
+#else
+void fdc_write(uint32_t port, const uint8_t data, void *opaque)
+#endif
 {
     uint8_t diffxor;
     switch (port) {
@@ -839,11 +847,13 @@ void fdc_init(struct pc_settings* pc)
     io_register_reset(fdc_reset2);
     state_register(fdc_state);
 
+#ifndef LIB86CPU
     // Register I/O
     io_register_read(0x3F0, 6, fdc_read, NULL, NULL);
     io_register_read(0x3F7, 1, fdc_read, NULL, NULL);
     io_register_write(0x3F0, 6, fdc_write, NULL, NULL);
     io_register_write(0x3F7, 1, fdc_write, NULL, NULL);
+#endif
 
     uint8_t fdc_types = 0, fdc_equipment = 0;
     for (int i = 0; i < 2; i++) {

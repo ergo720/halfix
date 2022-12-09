@@ -2,7 +2,7 @@
 //  Can be simulated optionally.
 // https://pdos.csail.mit.edu/6.828/2018/readings/ia32/ioapic.pdf
 
-#include "mmio.h"
+#include "io2.h"
 #include "devices.h"
 #include "pc.h"
 
@@ -103,7 +103,11 @@ static void ioapic_update(void)
     }
 }
 
+#ifndef LIB86CPU
 static uint32_t ioapic_read(uint32_t addr)
+#else
+uint32_t ioapic_read(uint32_t addr, void *opaque)
+#endif
 {
     addr -= ioapic.base;
     switch (addr >> 4) {
@@ -181,7 +185,11 @@ static uint32_t ioapic_read(uint32_t addr)
         return 0;
     }
 }
+#ifndef LIB86CPU
 static void ioapic_write(uint32_t addr, uint32_t data)
+#else
+void ioapic_write(uint32_t addr, const uint32_t data, void *opaque)
+#endif
 {
     addr -= ioapic.base;
     switch (addr >> 4) {
@@ -260,18 +268,34 @@ static void ioapic_write(uint32_t addr, uint32_t data)
 }
 // See corresponding comments in apic.c for details
 
+#ifndef LIB86CPU
 static uint32_t ioapic_readb(uint32_t addr)
+#else
+uint8_t ioapic_readb(uint32_t addr, void *opaque)
+#endif
 {
     //IOAPIC_LOG("8-bit read from %08x\n", addr);
+#ifdef LIB86CPU
+    return ioapic_read(addr & ~3, opaque) >> ((addr & 3) * 8) & 0xFF;
+#else
     return ioapic_read(addr & ~3) >> ((addr & 3) * 8) & 0xFF;
+#endif
 }
+#ifndef LIB86CPU
 static void ioapic_writeb(uint32_t addr, uint32_t data)
+#else
+void ioapic_writeb(uint32_t addr, const uint8_t data, void *opaque)
+#endif
 {
     int offset = addr & 3, byte_offset = offset << 3;
     ioapic.temp_data &= ~(0xFF << byte_offset);
     ioapic.temp_data |= data << byte_offset;
     if (offset == 3) {
+#ifdef LIB86CPU
+        ioapic_write(addr & ~3, ioapic.temp_data, opaque);
+#else
         ioapic_write(addr & ~3, ioapic.temp_data);
+#endif
     }
 }
 
@@ -360,7 +384,9 @@ void ioapic_init(struct pc_settings* pc)
 
     state_register(ioapic_state);
 
+#ifndef LIB86CPU
     // Map one page of MMIO at the specified address.
     io_register_mmio_read(ioapic.base, 4096, ioapic_readb, NULL, ioapic_read);
     io_register_mmio_write(ioapic.base, 4096, ioapic_writeb, NULL, ioapic_write);
+#endif
 }

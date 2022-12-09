@@ -1,7 +1,7 @@
 // Programmable interrupt timer emulation
 // http://www.brokenthorn.com/Resources/OSDevPit.html
 #include "devices.h"
-#include "mmio.h"
+#include "io2.h"
 #include "state.h"
 #include "util.h"
 #include <stdint.h>
@@ -196,33 +196,37 @@ static int pit_get_count(struct pit_channel* pit)
     return current;
 }
 
-static void pit_set_count(struct pit_channel* this, int v)
+static void pit_set_count(struct pit_channel*channel, int v)
 {
-    this->last_irq_time = this->last_load_time = get_now(); //pit_get_time();
-    this->count = (!v) << 16 | v; // 0x10000 if v is 0
-    this->period = pit_counter_to_itick(this->count);
-    this->timer_running = 1;
-    this->pit_last_count = pit_get_count(this); // should this be 0?
+    channel->last_irq_time = channel->last_load_time = get_now(); //pit_get_time();
+    channel->count = (!v) << 16 | v; // 0x10000 if v is 0
+    channel->period = pit_counter_to_itick(channel->count);
+    channel->timer_running = 1;
+    channel->pit_last_count = pit_get_count(channel); // should this be 0?
 }
-static void pit_channel_latch_counter(struct pit_channel* this)
+static void pit_channel_latch_counter(struct pit_channel*channel)
 {
-    if (!(this->whats_latched & COUNTER_LATCHED)) {
-        uint16_t ct = pit_get_count(this);
-        int mode = this->rw_mode;
-        this->whats_latched = (mode << 2) | COUNTER_LATCHED;
+    if (!(channel->whats_latched & COUNTER_LATCHED)) {
+        uint16_t ct = pit_get_count(channel);
+        int mode = channel->rw_mode;
+        channel->whats_latched = (mode << 2) | COUNTER_LATCHED;
         switch (mode) {
         case 1: // lobyte or hibyte only
         case 2:
-            this->counter_latch = ct >> ((mode - 1) << 3) & 0xFF;
+            channel->counter_latch = ct >> ((mode - 1) << 3) & 0xFF;
             break;
         case 3: // flipflop
-            this->counter_latch = ct;
+            channel->counter_latch = ct;
             break;
         }
     }
 }
 
+#ifndef LIB86CPU
 static void pit_writeb(uint32_t port, uint32_t value)
+#else
+void pit_writeb(uint32_t port, const uint8_t value, void *opaque)
+#endif
 {
     int channel = port & 3;
     switch (channel) {
@@ -304,8 +308,19 @@ static void pit_writeb(uint32_t port, uint32_t value)
     }
     }
 }
+#ifndef LIB86CPU
 static uint32_t pit_readb(uint32_t a)
+#else
+uint8_t pit_readb(uint32_t a, void *opaque)
+#endif
 {
+#ifdef LIB86CPU
+    if (a == 0x43) {
+        PIT_LOG("Unhandled read at port 0x43\n");
+        return 0xFF;
+    }
+#endif
+
     struct pit_channel* chan = &pit.chan[a & 3];
     uint8_t retv = -1;
     if (chan->whats_latched & STATUS_LATCHED) {
@@ -347,11 +362,11 @@ static uint32_t pit_readb(uint32_t a)
     return retv;
 }
 
-static void pit_channel_reset(struct pit_channel* this)
+static void pit_channel_reset(struct pit_channel* channel)
 {
-    this->count = 0;
-    this->flipflop = this->mode = this->bcd = this->gate = 0;
-    this->last_load_time = -1;
+    channel->count = 0;
+    channel->flipflop = channel->mode = channel->bcd = channel->gate = 0;
+    channel->last_load_time = -1;
 }
 
 static void pit_reset(void)
@@ -369,7 +384,7 @@ static void timer_cb(void)
 }
 
 // Get the number of ticks, in the future, that the PIT needs to wait.
-int pit_next(itick_t now)
+itick_t pit_next(itick_t now)
 {
     UNUSED(now);
     uint32_t count = pit_get_count(&pit.chan[0]), raise_irq = 0;
@@ -393,14 +408,22 @@ int pit_next(itick_t now)
     return -1;
 }
 
+#ifndef LIB86CPU
 static uint32_t pit_speaker_readb(uint32_t port)
+#else
+uint8_t pit_speaker_readb(uint32_t port, void *opaque)
+#endif
 {
     UNUSED(port);
     // XXX: Use channel 2 for timing, not channel 0
     pit.chan[2].timer_flipflop ^= 1;
     return pit.chan[2].timer_flipflop << 4 | (pit_get_out(&pit.chan[2]) << 5);
 }
+#ifndef LIB86CPU
 static void pit_speaker_writeb(uint32_t port, uint32_t data)
+#else
+void pit_speaker_writeb(uint32_t port, const uint8_t data, void *opaque)
+#endif
 {
     UNUSED(port | data);
     PIT_LOG("%sabled the pc speaker\n", data & 1 ? "En" : "Dis");
@@ -411,11 +434,13 @@ void pit_init(void)
     //state_register(pit_save);
     io_register_reset(pit_reset);
 
+#ifndef LIB86CPU
     io_register_read(0x40, 3, pit_readb, NULL, NULL);
     io_register_write(0x40, 4, pit_writeb, NULL, NULL);
 
     // Technically the PC speaker is not part of the PIT, but it's controlled by the PIT...
     io_register_read(0x61, 1, pit_speaker_readb, NULL, NULL);
     io_register_write(0x61, 1, pit_speaker_writeb, NULL, NULL);
+#endif
     state_register(pit_state);
 }

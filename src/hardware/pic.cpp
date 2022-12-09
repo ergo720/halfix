@@ -1,4 +1,8 @@
+#ifndef LIB86CPU
 #include "cpuapi.h"
+#else
+#include "lib86cpu/cpu.h"
+#endif
 #include "devices.h"
 #include "state.h"
 
@@ -77,8 +81,8 @@ static inline uint8_t rol(uint8_t value, uint8_t priority_base)
     return (value << count) | (value >> (8 - count));
 }
 
-static inline int is_master(struct pic_controller* this){
-    return this == &pic.ctrl[0];
+static inline int is_master(struct pic_controller* ctrl){
+    return ctrl == &pic.ctrl[0];
 }
 
 static void pic_state(void)
@@ -134,47 +138,59 @@ static void pic_reset(void)
         ctrl->elcr = 0; // Is this right? Doesn't matter since the BIOS resets it anyways
     }
 }
+#ifndef LIB86CPU
 static void pic_elcr_write(uint32_t addr, uint32_t data)
+#else
+void pic_elcr_write(uint32_t addr, const uint8_t data, void *opaque)
+#endif
 {
     pic.ctrl[addr & 1].elcr = data;
 }
+#ifndef LIB86CPU
 static uint32_t pic_elcr_read(uint32_t addr)
+#else
+uint8_t pic_elcr_read(uint32_t addr, void *opaque)
+#endif
 {
     return pic.ctrl[addr & 1].elcr;
 }
 
-static void pic_internal_update(struct pic_controller* this)
+static void pic_internal_update(struct pic_controller* ctrl)
 {
-    //if (this->raised_intr_line) // Wait for current interrupt to be serviced
+    //if (ctrl->raised_intr_line) // Wait for current interrupt to be serviced
     //    return;
     int unmasked, isr;
 
     // Check if any interrupts are unmasked
-    if (!(unmasked = this->irr & ~this->imr)) {
+    if (!(unmasked = ctrl->irr & ~ctrl->imr)) {
         //PIC_LOG("No unmasked interrupts\n");
         return;
     }
 
     // Rotate IRR around so that the interrupts are located in decreasing priority (0 1 2 3 4 5 6 7)
-    unmasked = rol(unmasked, this->priority_base);
-    PIC_LOG("Rotated: %02x Unmasked: %02x ISR: %02x\n", unmasked, this->irr & ~this->imr, this->isr);
+    unmasked = rol(unmasked, ctrl->priority_base);
+    PIC_LOG("Rotated: %02x Unmasked: %02x ISR: %02x\n", unmasked, ctrl->irr & ~ctrl->imr, ctrl->isr);
     // Do the same to the ISR
-    isr = rol(this->isr, this->priority_base);
+    isr = rol(ctrl->isr, ctrl->priority_base);
 
-    if ((this->ocw[3] & 0x60) == 0x60) {
+    if ((ctrl->ocw[3] & 0x60) == 0x60) {
         // Special mask mode -- ignore all values in the ISR
         unmasked &= ~isr;
 
         // Go through the remaining unmasked bits in order of descending priority and see if they are set.
         for (int i = 0; i < 8; i++) {
             if (unmasked & (1 << i)) {
-                //PIC_LOG("IRQ to send: %d\n", (this->priority_base + 1 + i) & 7);
+                //PIC_LOG("IRQ to send: %d\n", (ctrl->priority_base + 1 + i) & 7);
                 // An interrupt is unmasked here. Store it and tell the CPU to exit as fast as possible.
-                this->highest_priority_irq_to_send = (this->priority_base + 1 + i) & 7;
+                ctrl->highest_priority_irq_to_send = (ctrl->priority_base + 1 + i) & 7;
 
-                if(is_master(this)){
+                if(is_master(ctrl)){
+#ifndef LIB86CPU
                 cpu_raise_intr_line();
                 cpu_request_fast_return(EXIT_STATUS_IRQ);
+#else
+                cpu_raise_hw_int(g_cpu);
+#endif
                 }else{
                     // Pulse INT line so that the slave PIC gets our message
                     pic_lower_irq(2);
@@ -190,12 +206,16 @@ static void pic_internal_update(struct pic_controller* this)
             if (isr & mask)
                 return; // Nope, no requested interrupt has a higher priority than a servicing interrupt
             if (unmasked & (1 << i)) {
-                PIC_LOG("IRQ to send: %d irr=%02x pri=%02x rot=%02x\n", (this->priority_base + 1 + i) & 7, this->irr, this->priority_base, unmasked);
-                this->highest_priority_irq_to_send = (this->priority_base + 1 + i) & 7;
+                PIC_LOG("IRQ to send: %d irr=%02x pri=%02x rot=%02x\n", (ctrl->priority_base + 1 + i) & 7, ctrl->irr, ctrl->priority_base, unmasked);
+                ctrl->highest_priority_irq_to_send = (ctrl->priority_base + 1 + i) & 7;
 
-                if(is_master(this)){
-                cpu_raise_intr_line();
-                cpu_request_fast_return(EXIT_STATUS_IRQ);
+                if(is_master(ctrl)){
+#ifndef LIB86CPU
+                    cpu_raise_intr_line();
+                    cpu_request_fast_return(EXIT_STATUS_IRQ);
+#else
+                    cpu_raise_hw_int(g_cpu);
+#endif
                 }else{
                     pic_lower_irq(2);
                     pic_raise_irq(2);
@@ -208,33 +228,37 @@ static void pic_internal_update(struct pic_controller* this)
     return;
 }
 
-static uint8_t pic_internal_get_interrupt(struct pic_controller* this)
+static uint8_t pic_internal_get_interrupt(struct pic_controller* ctrl)
 {
-    int irq = this->highest_priority_irq_to_send, irq_mask = 1 << irq;
+    int irq = ctrl->highest_priority_irq_to_send, irq_mask = 1 << irq;
     // Sanity checks -- make sure that the highest priority interrupt is still within the IRR
-    if (!(this->irr & irq_mask)){
-        return this->vector_offset | 7;
+    if (!(ctrl->irr & irq_mask)){
+        return ctrl->vector_offset | 7;
     }
 
 #if 0 // XXX -- this is needed for PCI interrupts, but we simulate level-triggered with edge-triggered. 
     // If edge triggered, then clear bit
-    if (!(this->elcr & irq_mask))
+    if (!(ctrl->elcr & irq_mask))
 #endif
-        this->irr ^= irq_mask;
+        ctrl->irr ^= irq_mask;
 
     // Set ISR if not in Automatic EOI mode
-    if (this->autoeoi) {
-        if (this->rotate_on_autoeoi)
-            this->priority_base = irq;
+    if (ctrl->autoeoi) {
+        if (ctrl->rotate_on_autoeoi)
+            ctrl->priority_base = irq;
     } else
-        this->isr |= irq_mask;
+        ctrl->isr |= irq_mask;
     
-    if(is_master(this) && irq == 2)
+    if(is_master(ctrl) && irq == 2)
         return pic_internal_get_interrupt(&pic.ctrl[1]);
-    else return this->vector_offset + irq;
+    else return ctrl->vector_offset + irq;
 }
 
+#ifdef LIB86CPU
+uint16_t pic_get_interrupt()
+#else
 uint8_t pic_get_interrupt(void)
+#endif
 {   
     // If APIC is enabled in PC settings and it has an interrupt, get the interrupt!
     if(apic_has_interrupt())
@@ -242,28 +266,30 @@ uint8_t pic_get_interrupt(void)
     
     // This is our version of an IAC... the processor has indicated that it is ready to execute the interrupt.
     // All we have to do is fix up some state
+#ifndef LIB86CPU
     cpu_lower_intr_line();
+#endif
     int x = pic_internal_get_interrupt(&pic.ctrl[0]);
     return x;
 }
 
-static void pic_internal_raise_irq(struct pic_controller* this, int irq)
+static void pic_internal_raise_irq(struct pic_controller* ctrl, int irq)
 {
     int mask = 1 << irq;
     // Check for level/edge triggered interrupts
-    if (!(this->pin_state & mask)) {
+    if (!(ctrl->pin_state & mask)) {
         // Only edge triggered interrupts supported at the moment
-        this->pin_state |= mask;
-        this->irr |= mask;
-        pic_internal_update(this);
+        ctrl->pin_state |= mask;
+        ctrl->irr |= mask;
+        pic_internal_update(ctrl);
     }
 }
-static void pic_internal_lower_irq(struct pic_controller* this, int irq)
+static void pic_internal_lower_irq(struct pic_controller* ctrl, int irq)
 {
     int mask = 1 << irq;
-    this->irr &= ~mask;
-    this->pin_state &= ~mask;
-    if(!is_master(this) &&!this->irr) pic_lower_irq(2);
+    ctrl->irr &= ~mask;
+    ctrl->pin_state &= ~mask;
+    if(!is_master(ctrl) &&!ctrl->irr) pic_lower_irq(2);
 }
 
 void pic_raise_irq(int a)
@@ -284,135 +310,148 @@ void pic_lower_irq(int a)
     //if(!(pic.ctrl[0].irr | pic.ctrl[1].irr)) cpu_lower_intr_line();
 }
 
-static inline void pic_clear_specific(struct pic_controller* this, int irq){
-    this->isr &= ~(1 << irq);
+static inline void pic_clear_specific(struct pic_controller* ctrl, int irq){
+    ctrl->isr &= ~(1 << irq);
 }
-static inline void pic_set_priority(struct pic_controller* this, int irq){
-    this->priority_base = irq;
+static inline void pic_set_priority(struct pic_controller* ctrl, int irq){
+    ctrl->priority_base = irq;
 }
-static inline void pic_clear_highest_priority(struct pic_controller* this)
+static inline void pic_clear_highest_priority(struct pic_controller* ctrl)
 {
-    uint8_t highest = (this->priority_base + 1) & 7;
+    uint8_t highest = (ctrl->priority_base + 1) & 7;
     for (int i = 0; i < 8; i++) {
         uint8_t mask = 1 << ((highest + i) & 7);
-        if (this->isr & mask) {
-            this->isr ^= mask;
+        if (ctrl->isr & mask) {
+            ctrl->isr ^= mask;
             return;
         }
     }
 }
 
-static void pic_write_icw(struct pic_controller* this, int id, uint8_t value)
+static void pic_write_icw(struct pic_controller* ctrl, int id, uint8_t value)
 {
     //PIC_LOG("write to icw%d: %02x\n", id, value);
     switch (id) {
     case 1: // ICW1
-        this->icw_index = 2;
-        this->icw[1] = value;
+        ctrl->icw_index = 2;
+        ctrl->icw[1] = value;
 
-        this->imr = 0;
-        this->isr = 0;
-        this->irr = 0;
-        this->priority_base = 7; // Make IRQ0 have highest priority
+        ctrl->imr = 0;
+        ctrl->isr = 0;
+        ctrl->irr = 0;
+        ctrl->priority_base = 7; // Make IRQ0 have highest priority
         break;
     case 2:
-        this->vector_offset = value & ~7;
-        this->icw[2] = value;
-        if (this->icw[1] & 2) {
+        ctrl->vector_offset = value & ~7;
+        ctrl->icw[2] = value;
+        if (ctrl->icw[1] & 2) {
             // single pic
-            if (this->icw[1] & 1)
-                this->icw_index = 4;
+            if (ctrl->icw[1] & 1)
+                ctrl->icw_index = 4;
             else
-                this->icw_index = 5;
+                ctrl->icw_index = 5;
         } else
-            this->icw_index = 3;
+            ctrl->icw_index = 3;
         break;
     case 3:
-        this->icw[3] = value;
-        this->icw_index = 5 ^ (this->icw[1] & 1);
+        ctrl->icw[3] = value;
+        ctrl->icw_index = 5 ^ (ctrl->icw[1] & 1);
         break;
     case 4:
-        this->icw[4] = value;
-        this->autoeoi = value & 2;
-        this->icw_index = 5;
+        ctrl->icw[4] = value;
+        ctrl->autoeoi = value & 2;
+        ctrl->icw_index = 5;
     }
-    this->in_initialization = this->icw_index != 5;
+    ctrl->in_initialization = ctrl->icw_index != 5;
 }
 
-static void pic_write_ocw(struct pic_controller* this, int index, int data){
-    this->ocw[index] = data;
+static void pic_write_ocw(struct pic_controller* ctrl, int index, int data){
+    ctrl->ocw[index] = data;
     switch (index) {
     case 1: // OCW1: Interrupt mask register
-        this->imr = data;
+        ctrl->imr = data;
         // Resetting the IMR may result in an interrupt line finally being able to deliver interrupts.
         // This may happen when two devices give off interrupts during the same cpu_run frame.
         // Necessary for Win95 protected mode IDE driver. 
-        pic_internal_update(this);
+        pic_internal_update(ctrl);
         break;
     case 2: { // OCW2: EOI and rotate bits
         int rotate = data & 0x80, specific = data & 0x40, eoi = data & 0x20, l = data & 7;
         if (eoi) {
             if (specific) {
                 // Specific EOI command
-                pic_clear_specific(this, l);
+                pic_clear_specific(ctrl, l);
                 if (rotate)
-                    pic_set_priority(this, l);
-            } else {
-                // Non Specific EOI
-                pic_clear_highest_priority(this);
-                if (rotate)
-                    pic_set_priority(this, l);
+                    pic_set_priority(ctrl, l);
             }
-            pic_internal_update(this);
-        } else {
+            else {
+                // Non Specific EOI
+                pic_clear_highest_priority(ctrl);
+                if (rotate)
+                    pic_set_priority(ctrl, l);
+            }
+            pic_internal_update(ctrl);
+        }
+        else {
             if (specific) {
                 if (rotate)
-                    pic_set_priority(this, l);
+                    pic_set_priority(ctrl, l);
                 // Otherwise, NOP
-            } else
-                this->rotate_on_autoeoi = rotate > 0; // note: does not set priority
+            }
+            else
+                ctrl->rotate_on_autoeoi = rotate > 0; // note: does not set priority
         }
-        break;
+    }
+    break;
     case 3: { // Various other features
         if (data & 2)
-            this->read_isr = data & 1;
+            ctrl->read_isr = data & 1;
         else if (data & 0x44)
             PIC_LOG("Unknown feature: %02x\n", data);
     }
     }
-    }
 }
 
+#ifndef LIB86CPU
 static void pic_writeb(uint32_t addr, uint32_t data)
+#else
+void pic_writeb(uint32_t addr, const uint8_t data, void *opaque)
+#endif
 {
-    struct pic_controller* this = &pic.ctrl[addr >> 7 & 1];
+    struct pic_controller* ctrl = &pic.ctrl[addr >> 7 & 1];
     if((addr & 1) == 0){
         switch(data >> 3 & 3){
         case 0:
-            pic_write_ocw(this, 2, data);
+            pic_write_ocw(ctrl, 2, data);
             break;
         case 1:
-            pic_write_ocw(this, 3, data);
+            pic_write_ocw(ctrl, 3, data);
             break;
         default: // case 2 or 3
             // initialization
-            this->in_initialization = 1;
-            this->imr = this->isr = this->irr = 0;
-            this->priority_base = 7;
-            this->autoeoi = this->rotate_on_autoeoi = 0;
+            ctrl->in_initialization = 1;
+            ctrl->imr = ctrl->isr = ctrl->irr = 0;
+            ctrl->priority_base = 7;
+            ctrl->autoeoi = ctrl->rotate_on_autoeoi = 0;
+#ifndef LIB86CPU
             cpu_lower_intr_line();
-            pic_write_icw(this, 1, data);
+#endif
+            pic_write_icw(ctrl, 1, data);
             break;
         }
     } else {
         // OCW
-        if (this->in_initialization)
-            pic_write_icw(this, this->icw_index, data);
+        if (ctrl->in_initialization)
+            pic_write_icw(ctrl, ctrl->icw_index, data);
         else
-            pic_write_ocw(this, 1, data);
+            pic_write_ocw(ctrl, 1, data);
     }
 }
+#ifndef LIB86CPU
 static uint32_t pic_readb(uint32_t port)
+#else
+uint8_t pic_readb(uint32_t port, void *opaque)
+#endif
 {
     struct pic_controller* ctrl = &pic.ctrl[port >> 7 & 1];
     if (port & 1)
@@ -423,6 +462,7 @@ static uint32_t pic_readb(uint32_t port)
 
 void pic_init(struct pc_settings* pc)
 {
+#ifndef LIB86CPU
     io_register_write(0x20, 2, pic_writeb, NULL, NULL);
     io_register_read(0x20, 2, pic_readb, NULL, NULL);
     io_register_write(0xA0, 2, pic_writeb, NULL, NULL);
@@ -433,6 +473,7 @@ void pic_init(struct pc_settings* pc)
         io_register_write(0x4D0, 2, pic_elcr_write, NULL, NULL);
         io_register_read(0x4D0, 2, pic_elcr_read, NULL, NULL);
     }
+#endif
     io_register_reset(pic_reset);
     state_register(pic_state);
 
