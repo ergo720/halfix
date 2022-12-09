@@ -1,16 +1,12 @@
 # Halfix x86 emulator
 
-Halfix is a portable x86 emulator written in C99. It allows you to run legacy operating systems on modern platforms. 
+Halfix is a portable x86 emulator originally written in C99, but this fork was ported to C++20. It allows you to run legacy operating systems on modern platforms.
 
 ## Why?
 
-I made this mostly for fun, and because it was a great way to learn about the x86 PC architecture. On a more practical level, it can be used for:
- - Testing out or developing operating systems
- - Running old programs or operating systems that no longer work on modern computers or you wouldn't want to risk running on your personal computer. 
- - Simulating other x86-based systems (the CPU component can be isolated relatively easily and used in other projects)
- - Testing web browser performance
+This fork is used to test [lib86cpu](https://github.com/ergo720/lib86cpu), a cpu dynamic recompiler library.
 
-## Building and Running
+## Building
 
 This fork is focused only on Windows compatibility for now. You will need a C++20 compatible compiler, zlib, cmake and Visual Studio 2022. Only 64 bit builds are supported.
 
@@ -21,7 +17,7 @@ This fork is focused only on Windows compatibility for now. You will need a C++2
 
 ## System Specifications
 
- - [CPU](https://github.com/nepx/halfix/tree/master/src/cpu): x86-32 (FPU, MMX, SSE, SSE2, some SSE3, PAE)
+ - [CPU](https://github.com/nepx/halfix/tree/master/src/cpu): x86-32
  - RAM: Configurable - anywhere from 1 MB to 3584 MB
  - Devices:
    - Intel 8259 [Programmable Interrupt Controller](https://github.com/nepx/halfix/blob/master/src/hardware/pic.c)
@@ -42,51 +38,7 @@ This fork is focused only on Windows compatibility for now. You will need a C++2
 
 ## Compatibility
 
-It boots a wide range of operating system software, including all versions of DOS, most versions of Windows (excluding Windows 8), newer versions of OS/2 Warp (3 and 4.5), ReactOS, some varieties of Linux (ISO Linux, Damn Small Linux, Red Star OS 2, Buildroot, Ubuntu), 9Front, NeXTSTEP, several hobby OSes, and probably more. 
-
-See [Compatibility](compatibility.md) for more details.
-
-## Self-Virtualization
-
-Can you run the emulator inside the emulator? 
-
-Yes, but not very quickly. 
-
-![Halfix in Halfix](docs/pics/halfix-in-halfix.png)
-
-## Screenshots
-
-MS-DOS
-
-![DOS](docs/pics/dos.png)
-
-OS/2 Warp 4.5
-
-![OS/2 Warp](docs/pics/os2-warp4.png)
-
-Windows Vista
-
-![Vista](docs/pics/vista.png)
-
-Windows 7
-
-![Windows 7](docs/pics/win7.png)
-
-The same Windows 98 disk image as in the [Halfix in Halfix screenshot](docs/pics/halfix-in-halfix.png) running in Firefox
-
-![Win98](docs/pics/win98.png)
-
-CPU-Z on Windows XP
-
-![CPU-Z](docs/pics/cpu-z.png)
-
-Windows 10
-
-![Win10](docs/pics/win10.png)
-
-Ubuntu
-
-![Ubuntu](docs/pics/ubuntu.png)
+Currently nothing, as lib86cpu doesn't yet implement enough instructions to boot an OS.
 
 ## Transferring Files
 
@@ -110,15 +62,6 @@ driver=sync
 
 Now boot up your operating system and copy the files from the CD-ROM to the hard drive. 
 
-## Known Issues
- - SSE3 is not fully supported
- - Performance isn't terrible, but it isn't fantastic either (70-100 MIPS native, 10-30 MIPS browser)
- - Timing is completely off
- - Windows 8 doesn't boot (see [this issue](https://github.com/nepx/halfix/issues/1))
- - FPU exceptions are probably very incorrect
- - Most devices aren't complete, but enough is implemented to boot modern OSes. 
- - The configuration file parser isn't very good
-
 ## License
 
 GNU General Public License version 3
@@ -128,7 +71,3 @@ GNU General Public License version 3
  - [v86](https://www.github.com/copy/v86)
  - [JSLinux](http://bellard.org/jslinux/)
  - [jemul8](http://www.github.com/asmblah/jemul8)
-
-## Credits
-
-The FPU emulator uses an modified version of [Berkeley SoftFloat](jhauser.us/arithmetic/SoftFloat.html) from the [Bochs](bochs.sourceforge.net) emulator. 
