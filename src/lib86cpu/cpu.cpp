@@ -49,27 +49,27 @@ extern uint32_t ioapic_read(uint32_t addr, void *opaque);
 extern void ioapic_write(uint32_t addr, const uint32_t data, void *opaque);
 
 
-void cpu_destroy_io_region(uint32_t port, size_t size)
+void cpu_destroy_io_region(uint32_t port, uint32_t size)
 {
 	mem_destroy_region(g_cpu, port, size, true);
 }
 
-lc86_status cpu_add_io_region(port_t port, size_t size, io_handlers_t handlers, void *opaque)
+lc86_status cpu_add_io_region(port_t port, uint32_t size, io_handlers_t handlers, void *opaque)
 {
 	return mem_init_region_io(g_cpu, port, size, true, handlers, opaque);
 }
 
-lc86_status cpu_add_mmio_region(addr_t addr, size_t size, io_handlers_t handlers, void *opaque)
+lc86_status cpu_add_mmio_region(addr_t addr, uint32_t size, io_handlers_t handlers, void *opaque)
 {
 	return mem_init_region_io(g_cpu, addr, size, false, handlers, opaque);
 }
 
-lc86_status cpu_add_ram_region(addr_t addr, size_t size)
+lc86_status cpu_add_ram_region(addr_t addr, uint32_t size)
 {
 	return mem_init_region_ram(g_cpu, addr, size);
 }
 
-lc86_status cpu_add_rom_region(addr_t addr, size_t size, uint8_t *buffer)
+lc86_status cpu_add_rom_region(addr_t addr, uint32_t size, uint8_t *buffer)
 {
 	return mem_init_region_rom(g_cpu, addr, size, buffer);
 }
@@ -203,11 +203,11 @@ int cpu_init(struct pc_settings *pc)
 	}
 
 	io_handlers_t vga_handlers{ .fnr8 = vga_mem_readb, .fnw8 = vga_mem_writeb };
-	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, 0xA0000, 0x20000 - 1, false, vga_handlers, nullptr))) {
+	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, 0xA0000, 0x20000, false, vga_handlers, nullptr))) {
 		return -1;
 	}
 
-	size_t vga_mem_size = pc->vga_memory_size < (256 << 10) ? 256 << 10 : pc->vga_memory_size;
+	uint32_t vga_mem_size = pc->vga_memory_size < (256 << 10) ? 256 << 10 : pc->vga_memory_size;
 	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, 0xE0000000, vga_mem_size, false, vga_handlers, nullptr))) {
 		return -1;
 	}

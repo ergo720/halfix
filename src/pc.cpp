@@ -620,7 +620,7 @@ void pc_execute()
     while (true) {
         while (get_now() < next_deadline) {} // busy wait
 
-        // the functions below updat device states that can be accessed by the cpu with pmio or mmio, so the cpu must be stopped first
+        // the functions below update device states that can be accessed by the cpu with pmio or mmio, so the cpu must be stopped first
         cpu_pause(g_cpu, true);
 
         // update our screen and vga here
