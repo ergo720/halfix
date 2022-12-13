@@ -129,7 +129,7 @@ static int bios_ptr[2];
 #ifndef LIB86CPU
 static void bios_writeb(uint32_t port, uint32_t data)
 #else
-void bios_writeb(uint32_t port, const uint8_t data, void *opaque)
+void bios_writed(uint32_t port, const uint32_t data, void *opaque)
 #endif
 {
     int id;
@@ -187,12 +187,12 @@ void bios_writeb(uint32_t port, const uint8_t data, void *opaque)
 #ifdef LIB86CPU
 void bios_writew(uint32_t port, const uint16_t data, void *opaque)
 {
-    bios_writeb(port, static_cast<uint8_t>(data), opaque);
+    bios_writed(port, data, opaque);
 }
 
-void bios_writed(uint32_t port, const uint32_t data, void *opaque)
+void bios_writeb(uint32_t port, const uint8_t data, void *opaque)
 {
-    bios_writeb(port, data, opaque);
+    bios_writed(port, data, opaque);
 }
 #endif
 
@@ -204,7 +204,7 @@ uint8_t p61_data;
 #ifndef LIB86CPU
 static uint32_t bios_readb(uint32_t port)
 #else
-uint8_t bios_readb(uint32_t port, void *opaque)
+uint32_t bios_readd(uint32_t port, void *opaque)
 #endif
 {
     switch (port) {
@@ -225,12 +225,12 @@ uint8_t bios_readb(uint32_t port, void *opaque)
 #ifdef LIB86CPU
 uint16_t bios_readw(uint32_t port, void *opaque)
 {
-    return bios_readb(port, opaque);
+    return bios_readd(port, opaque);
 }
 
-uint32_t bios_readd(uint32_t port, void *opaque)
+uint8_t bios_readb(uint32_t port, void *opaque)
 {
-    return bios_readb(port, opaque);
+    return bios_readd(port, opaque);
 }
 #endif
 
@@ -314,7 +314,7 @@ int pc_init(struct pc_settings *pc)
         return -1;
     }
 
-    if (!LC86_SUCCESS(cpu_add_io_region(0x400, 4, io_handlers_t{ .fnw8 = bios_writeb }, nullptr))) {
+    if (!LC86_SUCCESS(cpu_add_io_region(0x400, 4, io_handlers_t{ .fnw8 = bios_writeb, .fnw16 = bios_writew }, nullptr))) {
         return -1;
     }
     if (!LC86_SUCCESS(cpu_add_io_region(0x500, 1, io_handlers_t{ .fnw8 = bios_writeb }, nullptr))) {
@@ -362,7 +362,7 @@ int pc_init(struct pc_settings *pc)
     if (!LC86_SUCCESS(cpu_add_io_region(0x2f0, 8, io_handlers_t{ .fnw8 = bios_writeb }, nullptr))) {
         return -1;
     }
-    if (!LC86_SUCCESS(cpu_add_io_region(0x270, 16, io_handlers_t{ .fnr8 = bios_readb }, nullptr))) {
+    if (!LC86_SUCCESS(cpu_add_io_region(0x270, 8, io_handlers_t{ .fnr8 = bios_readb }, nullptr))) {
         return -1;
     }
     if (!LC86_SUCCESS(cpu_add_io_region(0x6f0, 8, io_handlers_t{ .fnw8 = bios_writeb }, nullptr))) {
