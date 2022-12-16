@@ -3,7 +3,7 @@
 #include "cpuapi.h"
 #else
 #include "lib86cpu/cpu.h"
-#include <thread>
+#include "assert.h"
 #endif
 #include "devices.h"
 #include "display.h"
@@ -603,33 +603,20 @@ void pc_set_fast(int yes){
 #endif
 
 #ifdef LIB86CPU
-itick_t next_deadline;
-
-uint32_t pc_run()
-{
-    next_deadline = devices_get_next(get_now(), nullptr);
-    std::thread(pc_execute).detach();
-    lc86_status code = cpu_run(g_cpu);
-    printf("Emulation terminated with status %d. The error was \"%s\"\n", code, get_last_error().c_str());
-    cpu_free(g_cpu);
-    return 0;
-}
 
 void pc_execute()
 {
+    cpu_sync_state(g_cpu);
+
+    // main pc execution loop
     while (true) {
-        while (get_now() < next_deadline) {} // busy wait
+        // this updates the states of cmos, pit, apic and acpi, and calculates the first occurring deadline among them
+        itick_t next_deadline = devices_get_next(get_now(), nullptr);
+        cpu_run_until(g_cpu, next_deadline);
 
         // the functions below update device states that can be accessed by the cpu with pmio or mmio, so the cpu must be stopped first
-        cpu_pause(g_cpu, true);
-
-        // update our screen and vga here
         vga_update();
         display_handle_events();
-
-        // this updates the states of cmos, pit, apic and acpi, and calculates the first occurring deadline among them
-        next_deadline = devices_get_next(get_now(), nullptr);
-        cpu_resume(g_cpu);
     }
 #else
 int pc_execute()

@@ -148,9 +148,10 @@ itick_t get_now(void)
     QueryPerformanceCounter(&now);
     itick_t elapsed_us = (itick_t)(now.QuadPart) - base;
     base = now.QuadPart;
-    elapsed_us *= 1000000000;
+    elapsed_us *= 1000000;
     elapsed_us /= host_freq;
-    return exec_time += (elapsed_us / 1000);
+    exec_time += elapsed_us;
+    return exec_time;
 #else
 #error don't know how to implement get_now function on this OS
 #endif

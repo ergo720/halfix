@@ -157,7 +157,7 @@ parse_config:
 #else
 
 #ifdef LIB86CPU
-    pc_run();
+    pc_execute();
     return 0;
 #else
     // Good for real-world stuff

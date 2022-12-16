@@ -562,7 +562,7 @@ void apic_write(uint32_t addr, const uint32_t data, void *opaque)
         apic.timer_reload_time = get_now();
         apic.timer_next = apic.timer_reload_time + apic_get_period();
 #ifdef LIB86CPU
-        next_deadline = 0;
+        cpu_set_timeout(g_cpu, 0);
 #else
         cpu_cancel_execution_cycle(EXIT_STATUS_NORMAL);
 #endif
@@ -573,7 +573,7 @@ void apic_write(uint32_t addr, const uint32_t data, void *opaque)
         apic.timer_divide = data;
         APIC_LOG("Timer divide=%d\n", 1 << apic_get_clock_divide());
 #ifdef LIB86CPU
-        next_deadline = 0;
+        cpu_set_timeout(g_cpu, 0);
 #else
         cpu_cancel_execution_cycle(EXIT_STATUS_NORMAL);
 #endif
