@@ -186,7 +186,7 @@ static void apic_send_highest_priority_interrupt(void)
             // The next function that will be called is apic_get_interrupt()
             apic.intr_line_state = 1;
 #ifdef LIB86CPU
-            cpu_raise_hw_int(g_cpu);
+            cpu_raise_hw_int_line(g_cpu);
 #else
             cpu_raise_intr_line();
             cpu_request_fast_return(EXIT_STATUS_IRQ);
@@ -213,6 +213,8 @@ int apic_get_interrupt(void)
     apic.intr_line_state = 0;
 #ifndef LIB86CPU
     cpu_lower_intr_line();
+#else
+    cpu_lower_hw_int_line(g_cpu);
 #endif
 
     APIC_LOG("Sending interrupt %x\n", highest_irr);

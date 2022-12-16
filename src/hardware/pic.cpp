@@ -189,7 +189,7 @@ static void pic_internal_update(struct pic_controller* ctrl)
                 cpu_raise_intr_line();
                 cpu_request_fast_return(EXIT_STATUS_IRQ);
 #else
-                cpu_raise_hw_int(g_cpu);
+                cpu_raise_hw_int_line(g_cpu);
 #endif
                 }else{
                     // Pulse INT line so that the slave PIC gets our message
@@ -214,7 +214,7 @@ static void pic_internal_update(struct pic_controller* ctrl)
                     cpu_raise_intr_line();
                     cpu_request_fast_return(EXIT_STATUS_IRQ);
 #else
-                    cpu_raise_hw_int(g_cpu);
+                    cpu_raise_hw_int_line(g_cpu);
 #endif
                 }else{
                     pic_lower_irq(2);
@@ -268,6 +268,8 @@ uint8_t pic_get_interrupt(void)
     // All we have to do is fix up some state
 #ifndef LIB86CPU
     cpu_lower_intr_line();
+#else
+    cpu_lower_hw_int_line(g_cpu);
 #endif
     int x = pic_internal_get_interrupt(&pic.ctrl[0]);
     return x;
@@ -435,6 +437,8 @@ void pic_writeb(uint32_t addr, const uint8_t data, void *opaque)
             ctrl->autoeoi = ctrl->rotate_on_autoeoi = 0;
 #ifndef LIB86CPU
             cpu_lower_intr_line();
+#else
+            cpu_lower_hw_int_line(g_cpu);
 #endif
             pic_write_icw(ctrl, 1, data);
             break;
