@@ -610,6 +610,9 @@ void pc_execute()
 
     // main pc execution loop
     while (true) {
+        // Call the callback if needed, for async drive cases
+        drive_check_complete();
+
         // this updates the states of cmos, pit, apic and acpi, and calculates the first occurring deadline among them
         itick_t next_deadline = devices_get_next(get_now(), nullptr);
         cpu_run_until(g_cpu, next_deadline);
