@@ -103,11 +103,11 @@ logger(log_level lv, const unsigned count, const char *msg, ...)
 	if (count > 0) {
 		va_list args;
 		va_start(args, msg);
-		vprintf(str.c_str(), args);
+		vfprintf(stderr, str.c_str(), args);
 		va_end(args);
 	}
 	else {
-		printf("%s", str.c_str());
+		fprintf(stderr, "%s", str.c_str());
 	}
 }
 
