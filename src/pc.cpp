@@ -615,7 +615,11 @@ void pc_execute()
 
         // this updates the states of cmos, pit, apic and acpi, and calculates the first occurring deadline among them
         itick_t next_deadline = devices_get_next(get_now(), nullptr);
-        cpu_run_until(g_cpu, next_deadline);
+        auto ret = cpu_run_until(g_cpu, next_deadline);
+        if (ret != lc86_status::timeout) [[unlikely]] {
+            fprintf(stderr, "Emulation terminated with status %d. The error was \"%s\"\n", ret, get_last_error().c_str());
+            return;
+        }
 
         // the functions below update device states that can be accessed by the cpu with pmio or mmio, so the cpu must be stopped first
         vga_update();
