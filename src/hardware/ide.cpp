@@ -2230,7 +2230,7 @@ void ide_init(struct pc_settings* pc)
         ctrl->dma_enabled = pc->pci_enabled;
 
         if (info->sectors != 0) {
-            printf("Initializing disk %d\n", i);
+            fprintf(stderr, "Initializing disk %d\n", i);
             // Set appropriate DMA status bit
             ctrl->dma_status |= 0x20 << (i & 1);
 

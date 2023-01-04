@@ -319,7 +319,7 @@ static int parse_disk(struct drive_info* drv, struct ini_section* s, int id)
     }
 
     if (driver == 0 && wb)
-        printf("WARNING: Disk %d uses async (chunked) driver but writeback is not supported!!\n", id);
+        fprintf(stderr, "WARNING: Disk %d uses async (chunked) driver but writeback is not supported!!\n", id);
     drv->modify_backing_file = wb;
     if (path && inserted) {
 #ifndef EMSCRIPTEN

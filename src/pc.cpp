@@ -177,7 +177,7 @@ void bios_writed(uint32_t port, const uint32_t data, void *opaque)
         if (bios_ptr[id] == 100 || data == '\n') {
             bios_data[id][bios_ptr[id]] = 0;
             fprintf(stderr, "%sBIOS says: '%s'\n", id ? "VGA" : "", bios_data[id]);
-            printf("%sBIOS says: '%s'\n", id ? "VGA" : "", bios_data[id]);
+            fprintf(stderr, "%sBIOS says: '%s'\n", id ? "VGA" : "", bios_data[id]);
             bios_ptr[id] = 0;
         }
         break;
