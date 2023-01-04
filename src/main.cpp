@@ -134,6 +134,19 @@ parse_config:
     if (result < 0)
         return -1;
 
+#ifdef LIB86CPU
+    // The interrupt timers of apic and acpi return a time point into the future, which doesn't work with cpu_run_until, so forbid them until they are fixed
+    if (pc.apic_enabled) {
+        fprintf(stderr, "Apic emulation not supported for now\n");
+        return -1;
+    }
+
+    if (pc.acpi_enabled) {
+        fprintf(stderr, "Acpi emulation not supported for now\n");
+        return -1;
+    }
+#endif
+
     if (pc.memory_size < (1 << 20)) {
         fprintf(stderr, "Memory size (0x%x) too small\n", pc.memory_size);
         return -1;
