@@ -324,17 +324,27 @@ int cmos_clock(itick_t now)
 
     done:
         cmos.last_called = get_now();
-        if (why){
+        if (why) {
             cmos_raise_irq(why);
+#ifndef LIB86CPU
             return 1;
         }
+#else
+        }
+        return 1;
+#endif
     }
     return 0;
 }
 itick_t cmos_next(itick_t now)
 {
-    cmos_clock(now);
-    return cmos.last_called + cmos.period - now;
+    int has_expired = cmos_clock(now);
+#ifdef LIB86CPU
+    if (has_expired) {
+        return cmos.period; // interrupt time period
+    }
+#endif
+    return cmos.last_called + cmos.period - now; // time remaining until next interrupt
 }
 
 void cmos_set(uint8_t where, uint8_t data)
