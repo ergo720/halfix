@@ -368,23 +368,22 @@ static
     void
     vga_write(uint32_t port, uint32_t data)
 #else
-void vga_writew(uint32_t port, const uint16_t data, void *opaque)
+static void vga_writew2(uint32_t port, uint16_t data, void *opaque)
 #endif
 {
-    uint32_t data1 = data;
     if ((port >= 0x3B0 && port <= 0x3BF && (vga.misc & 1)) || (port >= 0x3D0 && port <= 0x3DF && !(vga.misc & 1))) {
-        VGA_LOG("Ignoring unsupported write to addr=%04x data1=%02x misc=%02x\n", port, data1, vga.misc);
+        VGA_LOG("Ignoring unsupported write to addr=%04x data=%02x misc=%02x\n", port, data, vga.misc);
         return;
     }
     uint8_t diffxor;
     switch (port) {
     case 0x1CE: // Bochs VBE index
-        vga.vbe_index = data1;
+        vga.vbe_index = data;
         break;
     case 0x1CF: // Bochs VBE data
         switch (vga.vbe_index) {
         case 0:
-            vga.vbe_version = data1;
+            vga.vbe_version = data;
             break;
         case 1:
         case 2:
@@ -392,26 +391,27 @@ void vga_writew(uint32_t port, const uint16_t data, void *opaque)
             if (vga.vbe_enable & VBE_DISPI_GETCAPS)
                 VGA_LOG("Ignoring write (%d): GETCAPS bit\n", port);
             else {
-                if (vga.vbe_index == 3 && data1 == 0)
-                    data1 = 8;
+                if (vga.vbe_index == 3 && data == 0)
+                    data = 8;
                 if (!(vga.vbe_enable & VBE_DISPI_ENABLED)) {
-                    if (data1 <= vbe_maximums[vga.vbe_index - 1])
-                        vga.vbe_regs[vga.vbe_index] = data1; // Note: no "vga.vbe_index - 1" required here
+                    if (data <= vbe_maximums[vga.vbe_index - 1])
+                        vga.vbe_regs[vga.vbe_index] = data; // Note: no "vga.vbe_index - 1" required here
                     else
-                        VGA_LOG("VBE reg out of range: reg=%d val=%x\n", port, data1);
-                } else
+                        VGA_LOG("VBE reg out of range: reg=%d val=%x\n", port, data);
+                }
+                else
                     VGA_LOG("Setting reg %d when VBE is enabled\n", vga.vbe_index);
             }
             break;
         case 4:
-            diffxor = vga.vbe_enable ^ data1;
+            diffxor = vga.vbe_enable ^ data;
             if (diffxor) {
                 if (!(diffxor & VBE_DISPI_ENABLED)) {
-                    data1 &= ~VBE_DISPI_LFB_ENABLED;
-                    data1 |= vga.vbe_enable & VBE_DISPI_LFB_ENABLED;
+                    data &= ~VBE_DISPI_LFB_ENABLED;
+                    data |= vga.vbe_enable & VBE_DISPI_LFB_ENABLED;
                 }
-                VGA_LOG(" Set VBE enable=%04x bpp=%d diffxor=%04x current=%04x\n", data1, vga.vbe_regs[3], diffxor, vga.vbe_enable);
-                vga.vbe_enable = data1;
+                VGA_LOG(" Set VBE enable=%04x bpp=%d diffxor=%04x current=%04x\n", data, vga.vbe_regs[3], diffxor, vga.vbe_enable);
+                vga.vbe_enable = data;
                 if (vga.vbe_regs[3] == 4)
                     VGA_FATAL("TODO: support VBE 4-bit modes\n");
 
@@ -426,7 +426,7 @@ void vga_writew(uint32_t port, const uint16_t data, void *opaque)
                 if (diffxor & VBE_DISPI_ENABLED) {
                     vga_change_renderer();
                     if (vga.vbe_enable & VBE_DISPI_ENABLED)
-                        if (!(data1 & VBE_DISPI_NOCLEARMEM)) // should i use diffxor or data1?
+                        if (!(data & VBE_DISPI_NOCLEARMEM)) // should i use diffxor or data?
                             memset(vga.vram, 0, vga.vram_size);
                 }
 
@@ -443,14 +443,14 @@ void vga_writew(uint32_t port, const uint16_t data, void *opaque)
             }
             break;
         case 5:
-            data1 <<= 16;
-            if (data1 >= (unsigned int)vga.vram_size)
-                VGA_FATAL("Unsupported VBE bank offset: %08x\n", data1);
-            vga.vbe_regs[5] = data1;
+            data <<= 16;
+            if (data >= (unsigned int)vga.vram_size)
+                VGA_FATAL("Unsupported VBE bank offset: %08x\n", data);
+            vga.vbe_regs[5] = data;
             break;
         case 6: { // vbe virtual width
             int bpp = (vga.vbe_regs[3] + 7) >> 3;
-            vga.vbe_regs[6] = data1;
+            vga.vbe_regs[6] = data;
             if (bpp)
                 vga.vbe_regs[7] = vga.vram_size / bpp;
             else
@@ -458,11 +458,11 @@ void vga_writew(uint32_t port, const uint16_t data, void *opaque)
             break;
         }
         case 7: // vbe virtual height
-            vga.vbe_regs[7] = data1;
+            vga.vbe_regs[7] = data;
             break;
         case 8:
         case 9:
-            vga.vbe_regs[vga.vbe_index] = data1;
+            vga.vbe_regs[vga.vbe_index] = data;
             break;
         default:
             VGA_FATAL("Unknown VBE register: %d\n", vga.vbe_index);
@@ -471,17 +471,18 @@ void vga_writew(uint32_t port, const uint16_t data, void *opaque)
     case 0x3C0: // Attribute controller register
         if (!(vga.attr_index & 0x80)) {
             // Select attribute index
-            diffxor = (vga.attr_index ^ data1);
-            vga.attr_index = data1 & 0x7F /* | (vga.attr_index & 0x80) */; // We already know that attr_index is zero
+            diffxor = (vga.attr_index ^ data);
+            vga.attr_index = data & 0x7F /* | (vga.attr_index & 0x80) */; // We already know that attr_index is zero
             if (diffxor & 0x20)
                 vga_change_renderer();
-            vga.attr_index = data1 & 0x7F /* | (vga.attr_index & 0x80) */; // We already know that attr_index is zero
-        } else {
-            // Select attribute data1
+            vga.attr_index = data & 0x7F /* | (vga.attr_index & 0x80) */; // We already know that attr_index is zero
+        }
+        else {
+            // Select attribute data
             uint8_t index = vga.attr_index & 0x1F;
-            diffxor = vga.attr[index] ^ data1;
+            diffxor = vga.attr[index] ^ data;
             if (diffxor) {
-                vga.attr[index] = data1;
+                vga.attr[index] = data;
                 switch (index) {
                 case 0x00:
                 case 0x01:
@@ -522,24 +523,24 @@ bit   0  Graphics mode if set, Alphanumeric mode else.
                 */
                     if (diffxor & ((1 << 0) | // Alphanumeric/Graphical Mode
                                       //(1 << 5) | // Line Compare Register
-                                      (1 << 6)) // Pixel Width
+                        (1 << 6)) // Pixel Width
                         )
                         vga_change_renderer(); // Changes between graphics/alphanumeric mode
                     if (diffxor & 0x80)
                         for (int i = 0; i < 16; i++)
                             vga_change_attr_cache(i);
                     if (diffxor & ((1 << 2) | // Character Width
-                                      (1 << 3) | // Blinking
-                                      (1 << 5)) // Line compare reset PEL Panning
+                        (1 << 3) | // Blinking
+                        (1 << 5)) // Line compare reset PEL Panning
                         )
                         vga_complete_redraw();
-                    VGA_LOG("Mode Control Register: %02x\n", data1);
+                    VGA_LOG("Mode Control Register: %02x\n", data);
                     break;
                 case 17: // Overscan color register break;
-                    VGA_LOG("Overscan color (currently unused): %02x\n", data1);
+                    VGA_LOG("Overscan color (currently unused): %02x\n", data);
                     break;
                 case 18: // Color Plane Enable
-                    VGA_LOG("Color plane enable: %02x\n", data1);
+                    VGA_LOG("Color plane enable: %02x\n", data);
                     vga.attr[18] &= 0x0F;
                     break;
                 case 19: // Horizontal PEL Panning Register
@@ -559,16 +560,16 @@ bit   0  Graphics mode if set, Alphanumeric mode else.
                     //   8     -     0       -
                     //   9 and above: all undefined
                     // Note that due to these restrictions, it's impossible to obscure a full col of characters (and why would you want to do such a thing?)
-                    if (data1 > 8)
+                    if (data > 8)
                         VGA_FATAL("Unknown PEL pixel panning value");
                     if (vga.gfx[5] & 0x40)
-                        vga.pixel_panning = data1 >> 1 & 3;
+                        vga.pixel_panning = data >> 1 & 3;
                     else
-                        vga.pixel_panning = (data1 & 7) + (vga.char_width & 1);
-                    VGA_LOG("Pixel panning: %d [raw], %d [effective value]\n", data1, vga.pixel_panning);
+                        vga.pixel_panning = (data & 7) + (vga.char_width & 1);
+                    VGA_LOG("Pixel panning: %d [raw], %d [effective value]\n", data, vga.pixel_panning);
                     break;
                 case 20: // Color Select Register
-                    VGA_LOG("Color select register: %02x\n", data1);
+                    VGA_LOG("Color select register: %02x\n", data);
                     if (diffxor & 15)
                         for (int i = 0; i < 16; i++)
                             vga_change_attr_cache(i);
@@ -579,7 +580,7 @@ bit   0  Graphics mode if set, Alphanumeric mode else.
         vga.attr_index ^= 0x80;
         break;
     case 0x3C2: // Miscellaneous Register
-        VGA_LOG("Write VGA miscellaneous register: 0x%02x\n", data1);
+        VGA_LOG("Write VGA miscellaneous register: 0x%02x\n", data);
         /*
 bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
          Address=3Bxh.
@@ -598,7 +599,7 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
               2=350(EGA)  350(VGA)
               3=          480(VGA).
         */
-        vga.misc = data1;
+        vga.misc = data;
         break;
     case 0x3B8:
     case 0x3BF: // ???
@@ -606,10 +607,10 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
     case 0x3DA:
     case 0x3D8:
     case 0x3CD:
-        VGA_LOG("Unknown write to %x: %02x\n", port, data1);
+        VGA_LOG("Unknown write to %x: %02x\n", port, data);
         break;
     case 0x3C4: // Sequencer Index
-        vga.seq_index = data1 & 7;
+        vga.seq_index = data & 7;
         break;
     case 0x3C5: { // Sequencer Data
         const uint8_t mask[8] = {
@@ -623,16 +624,16 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
             MASK(0b11111111), // 6
             MASK(0b11111111) // 7
         };
-        data1 &= mask[vga.seq_index];
-        diffxor = vga.seq[vga.seq_index] ^ data1;
+        data &= mask[vga.seq_index];
+        diffxor = vga.seq[vga.seq_index] ^ data;
         if (diffxor) {
-            vga.seq[vga.seq_index] = data1;
+            vga.seq[vga.seq_index] = data;
             switch (vga.seq_index) {
             case 0: // Sequencer Reset
                 VGA_LOG("SEQ: Resetting sequencer\n");
                 break;
             case 1: // Clocking Mode
-                VGA_LOG("SEQ: Setting Clocking Mode to 0x%02x\n", data1);
+                VGA_LOG("SEQ: Setting Clocking Mode to 0x%02x\n", data);
                 if (diffxor & 0x20) // Screen Off
                     vga_change_renderer();
                 if (diffxor & 0x08) { // Dot Clock Divide (AKA Fat Screen). Each column will be duplicated
@@ -640,22 +641,22 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
                     vga_update_size();
                 }
                 if (diffxor & 0x01) { // 8/9 Dot Clocks
-                    vga.char_width = 9 ^ (data1 & 1);
+                    vga.char_width = 9 ^ (data & 1);
                     vga_update_size();
                     vga_complete_redraw();
                 }
                 break;
             case 2: // Memory Write Access
-                VGA_LOG("SEQ: Memory plane write access: 0x%02x\n", data1);
+                VGA_LOG("SEQ: Memory plane write access: 0x%02x\n", data);
                 break;
             case 3: // Character Map Select
                 // Note these are font addresses in plane 2
-                VGA_LOG("SEQ: Memory plane write access: 0x%02x\n", data1);
-                vga.character_map[0] = vga_char_map_address((data1 >> 5 & 1) | (data1 >> 1 & 6));
-                vga.character_map[1] = vga_char_map_address((data1 >> 4 & 1) | (data1 << 1 & 6));
+                VGA_LOG("SEQ: Memory plane write access: 0x%02x\n", data);
+                vga.character_map[0] = vga_char_map_address((data >> 5 & 1) | (data >> 1 & 6));
+                vga.character_map[1] = vga_char_map_address((data >> 4 & 1) | (data << 1 & 6));
                 break;
             case 4: // Memory Mode
-                VGA_LOG("SEQ: Memory Mode: 0x%02x\n", data1);
+                VGA_LOG("SEQ: Memory Mode: 0x%02x\n", data);
                 if (diffxor & 0b1100)
                     vga_update_mem_access();
                 break;
@@ -665,20 +666,20 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
     break;
     case 0x3C6: // DAC Palette Mask
         // Used to play around with which colors can be accessed in the 256 DAC cache
-        vga.dac_mask = data1;
+        vga.dac_mask = data;
         vga_complete_redraw(); // Doing something as drastic as this deserves a redraw
         break;
     case 0x3C7: // DAC Read Address
-        vga.dac_read_address = data1;
+        vga.dac_read_address = data;
         vga.dac_color = 0;
         break;
     case 0x3C8: // PEL Address Write Mode
-        vga.dac_address = data1;
+        vga.dac_address = data;
         vga.dac_color = 0;
         break;
     case 0x3C9: // PEL Data Write
         vga.dac_state = 3;
-        vga.dac[(vga.dac_address << 2) | vga.dac_color++] = data1;
+        vga.dac[(vga.dac_address << 2) | vga.dac_color++] = data;
         if (vga.dac_color == 3) { // 0: red, 1: green, 2: blue, 3: ???
             update_one_dac_entry(vga.dac_address);
             vga.dac_address++; // This will wrap around because it is a uint8_t
@@ -686,7 +687,7 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
         }
         break;
     case 0x3CE: // Graphics Register Index
-        vga.gfx_index = data1 & 15;
+        vga.gfx_index = data & 15;
         break;
     case 0x3CF: { // Graphics Register Data
         const uint8_t mask[16] = {
@@ -708,36 +709,36 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
             MASK(0b11111111), // 15 - not documented
             //MASK(0b00000000), // 18 - scratch room vga
         };
-        data1 &= mask[vga.gfx_index];
-        diffxor = vga.gfx[vga.gfx_index] ^ data1;
+        data &= mask[vga.gfx_index];
+        diffxor = vga.gfx[vga.gfx_index] ^ data;
         if (diffxor) {
-            vga.gfx[vga.gfx_index] = data1;
+            vga.gfx[vga.gfx_index] = data;
             switch (vga.gfx_index) {
             case 0: // Set/Reset Plane
-                VGA_LOG("Set/Reset Plane: %02x\n", data1);
+                VGA_LOG("Set/Reset Plane: %02x\n", data);
                 break;
             case 1: // Enable Set/Reset Plane
-                VGA_LOG("Enable Set/Reset Plane: %02x\n", data1);
+                VGA_LOG("Enable Set/Reset Plane: %02x\n", data);
                 break;
             case 2: // Color Comare
-                VGA_LOG("Color Compare: %02x\n", data1);
+                VGA_LOG("Color Compare: %02x\n", data);
                 break;
             case 3: // Data Rotate/ALU Operation Select
-                VGA_LOG("Data Rotate: %02x\n", data1);
+                VGA_LOG("Data Rotate: %02x\n", data);
                 break;
             case 4: // Read Plane Select
-                VGA_LOG("Read Plane Select: %02x\n", data1);
+                VGA_LOG("Read Plane Select: %02x\n", data);
                 break;
             case 5: //  Graphics Mode
-                VGA_LOG("Graphics Mode: %02x\n", data1);
+                VGA_LOG("Graphics Mode: %02x\n", data);
                 if (diffxor & (3 << 5)) // Shift Register Control
                     vga_change_renderer();
                 if (diffxor & ((1 << 3) | (1 << 4) | 3))
                     vga_update_mem_access();
                 break;
             case 6: // Miscellaneous Register
-                VGA_LOG("Miscellaneous Register: %02x\n", data1);
-                switch (data1 >> 2 & 3) {
+                VGA_LOG("Miscellaneous Register: %02x\n", data);
+                switch (data >> 2 & 3) {
                 case 0:
                     vga.vram_window_base = 0xA0000;
                     vga.vram_window_size = 0x20000;
@@ -759,22 +760,21 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
                     vga_change_renderer();
                 break;
             case 7:
-                VGA_LOG("Color Don't Care: %02x\n", data1);
+                VGA_LOG("Color Don't Care: %02x\n", data);
                 break;
             case 8:
-                VGA_LOG("Bit Mask Register: %02x\n", data1);
+                VGA_LOG("Bit Mask Register: %02x\n", data);
                 break;
             }
         }
         break;
     }
-    break;
     case 0x3D4:
     case 0x3B4: // CRT index
-        vga.crt_index = data1/* & 0x3F*/;
+        vga.crt_index = data/* & 0x3F*/;
         break;
     case 0x3D5:
-    case 0x3B5: { // CRT data1
+    case 0x3B5: { // CRT data
         static uint8_t mask[64] = {
             // 0-7 are changed based on CR11 bit 7
             MASK(0b00000000), // 0
@@ -804,49 +804,49 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
             MASK(0b00000000) // 18
         };
         // Don't allow ourselves to go out of bounds
-        if(vga.crt_index > 0x3F) break;
+        if (vga.crt_index > 0x3F) break;
         // The extra difficulty here comes from the fact that the mask is used here to allow masking of CR0-7 in addition to keeping out undefined bits
-        data1 &= mask[vga.crt_index];
+        data &= mask[vga.crt_index];
         // consider the case when we write 0x33 to CR01 (which is currently 0x66) and write protection is own
         // In this case, we would be doing (0x33 & 0) ^ 0x66 which would result in 0x66 being put in diffxor
         // However, if we masked the result, the following would occur: ((0x33 & 0) ^ 0x66) & 0 = 0
-        diffxor = (data1 ^ vga.crt[vga.crt_index]) & mask[vga.crt_index];
+        diffxor = (data ^ vga.crt[vga.crt_index]) & mask[vga.crt_index];
         if (diffxor) {
-            vga.crt[vga.crt_index] = data1 | (vga.crt[vga.crt_index] & ~mask[vga.crt_index]);
+            vga.crt[vga.crt_index] = data | (vga.crt[vga.crt_index] & ~mask[vga.crt_index]);
             switch (vga.crt_index) {
             case 1:
-                VGA_LOG("End Horizontal Display: %02x\n", data1);
+                VGA_LOG("End Horizontal Display: %02x\n", data);
                 vga_update_size();
                 break;
             case 2:
-                VGA_LOG("Start Horizontal Blanking: %02x\n", data1);
+                VGA_LOG("Start Horizontal Blanking: %02x\n", data);
                 vga_update_size();
                 break;
             case 7:
-                VGA_LOG("CRT Overflow: %02x\n", data1);
+                VGA_LOG("CRT Overflow: %02x\n", data);
                 vga_update_size();
                 break;
             case 9:
-                VGA_LOG("Start Horizontal Blanking: %02x\n", data1);
+                VGA_LOG("Start Horizontal Blanking: %02x\n", data);
                 if (diffxor & 0x20)
                     vga_update_size();
                 break;
             case 0x11:
                 if (diffxor & 0x80) {
                     uint8_t fill_value = (int8_t)(vga.crt[0x11] ^ 0x80) >> 7;
-                    //printf("%d: %d [%02x]\n", fill_value, vga.crt_index, data1);
+                    //printf("%d: %d [%02x]\n", fill_value, vga.crt_index, data);
                     for (int i = 0; i < 8; i++)
                         mask[i] = fill_value;
                     mask[7] &= ~0x10;
-                    data1 &= mask[vga.crt_index];
+                    data &= mask[vga.crt_index];
                 }
                 break;
             case 0x12:
-                VGA_LOG("Vertical Display End: %02x\n", data1);
+                VGA_LOG("Vertical Display End: %02x\n", data);
                 vga_update_size();
                 break;
             case 0x15:
-                VGA_LOG("Start Vertical Blanking: %02x\n", data1);
+                VGA_LOG("Start Vertical Blanking: %02x\n", data);
                 vga_update_size();
                 break;
             }
@@ -854,14 +854,19 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
         break;
     }
     default:
-        VGA_LOG("VGA write: 0x%x [data1: 0x%02x]\n", port, data1);
+        VGA_LOG("VGA write: 0x%x [data: 0x%02x]\n", port, data);
     }
 }
 
 #ifdef LIB86CPU
 void vga_writeb(uint32_t port, const uint8_t data, void *opaque)
 {
-    vga_writew(port, data, opaque);
+    vga_writew2(port, data, opaque);
+}
+
+void vga_writew(uint32_t port, const uint16_t data, void *opaque)
+{
+    vga_writew2(port, data, opaque);
 }
 #endif
 

@@ -192,14 +192,12 @@ int cpu_init(struct pc_settings *pc)
 	}
 
 	// vga
-	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, 0x3B0, 48, true, io_handlers_t{ .fnr8 = vga_readb, .fnr16 = vga_readw,
-		.fnw8 = vga_writeb, .fnw16 = vga_writew }, nullptr))) {
+	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, 0x3B0, 48, true, io_handlers_t{ .fnr8 = vga_readb, .fnr16 = vga_readw, .fnw8 = vga_writeb, .fnw16 = vga_writew }, nullptr))) {
 		return -1;
 	}
 
 	if (pc->vbe_enabled) {
-		if (!LC86_SUCCESS(mem_init_region_io(g_cpu, 0x1CE, 2, true, io_handlers_t{ .fnr8 = vga_readb, .fnr16 = vga_readw, .fnw8 = vga_writeb,
-			.fnw16 = vga_writew }, nullptr))) {
+		if (!LC86_SUCCESS(mem_init_region_io(g_cpu, 0x1CE, 2, true, io_handlers_t{ .fnr16 = vga_readw, .fnw16 = vga_writew }, nullptr))) {
 			return -1;
 		}
 	}
