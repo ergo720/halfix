@@ -38,7 +38,7 @@ This fork is focused only on Windows compatibility for now. You will need a C++2
 
 ## Compatibility
 
-Currently nothing, as lib86cpu doesn't yet implement enough instructions to boot an OS.
+Currently, it can boot the Boch's BIOS when used in conjunction with the LGPL'ed VGA BIOS.
 
 ## Transferring Files
 
