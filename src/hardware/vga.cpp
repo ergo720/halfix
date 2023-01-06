@@ -1405,6 +1405,14 @@ uint8_t vga_mem_readb(uint32_t addr, void *opaque)
     return data;
 }
 
+#ifdef LIB86CPU
+uint16_t vga_mem_readw(uint32_t addr, void *opaque)
+{
+    uint16_t result = vga_mem_readb(addr, opaque);
+    return result | vga_mem_readb(addr + 1, opaque) << 8;
+}
+#endif
+
 static uint8_t alu_rotate(uint8_t value)
 {
     uint8_t rotate_count = vga.gfx[3] & 7;
@@ -1565,6 +1573,12 @@ void vga_mem_writeb(uint32_t addr, const uint8_t data, void *opaque)
 }
 
 #ifdef LIB86CPU
+void vga_mem_writew(uint32_t addr, const uint16_t data, void *opaque)
+{
+    vga_mem_writeb(addr, data & 0xFF, opaque);
+    vga_mem_writeb(addr + 1, (data >> 8) & 0xFF, opaque);
+}
+
 uint32_t vgabios_addr;
 
 uint8_t vga_rom_readb(uint32_t addr, void *opaque);

@@ -290,155 +290,18 @@ int pc_init(struct pc_settings *pc)
     ioapic_init(pc);
     acpi_init(pc);
 
-#ifndef LIB86CPU
-    //cpu_set_a20(0); // causes code to be prefetched from 0xFFEFxxxx at boot
-    cpu_set_a20(1);
-#endif
-
     io_trigger_reset();
+
+    firmware_memory_size = pc->memory_size;
 
     display_init();
 
-#ifdef LIB86CPU
-
-    if (!LC86_SUCCESS(cpu_add_io_region(0xB3, 1, io_handlers_t{ .fnr8 = bios_readb }, nullptr))) {
-        return -1;
-    }
-    if (!LC86_SUCCESS(cpu_add_io_region(0x511, 1, io_handlers_t{ .fnr8 = bios_readb }, nullptr))) {
-        return -1;
-    }
-    if (!LC86_SUCCESS(cpu_add_io_region(0x510, 1, io_handlers_t{ .fnw16 = bios_writew }, nullptr))) {
-        return -1;
-    }
-    if (!LC86_SUCCESS(cpu_add_io_region(0x8900, 1, io_handlers_t{ .fnw8 = bios_writeb }, nullptr))) {
-        return -1;
-    }
-
-    if (!LC86_SUCCESS(cpu_add_io_region(0x400, 4, io_handlers_t{ .fnw8 = bios_writeb, .fnw16 = bios_writew }, nullptr))) {
-        return -1;
-    }
-    if (!LC86_SUCCESS(cpu_add_io_region(0x500, 1, io_handlers_t{ .fnw8 = bios_writeb }, nullptr))) {
-        return -1;
-    }
-
-    if (!LC86_SUCCESS(cpu_add_io_region(0x378, 8, io_handlers_t{ .fnr8 = bios_readb, .fnw8 = bios_writeb }, nullptr))) {
-        return -1;
-    }
-    if (!LC86_SUCCESS(cpu_add_io_region(0x278, 8, io_handlers_t{ .fnr8 = bios_readb, .fnw8 = bios_writeb }, nullptr))) {
-        return -1;
-    }
-    if (!LC86_SUCCESS(cpu_add_io_region(0x3f8, 8, io_handlers_t{ .fnr8 = bios_readb, .fnw8 = bios_writeb }, nullptr))) {
-        return -1;
-    }
-    if (!LC86_SUCCESS(cpu_add_io_region(0x2f8, 8, io_handlers_t{ .fnr8 = bios_readb, .fnw8 = bios_writeb }, nullptr))) {
-        return -1;
-    }
-    if (!LC86_SUCCESS(cpu_add_io_region(0x3e8, 8, io_handlers_t{ .fnr8 = bios_readb, .fnw8 = bios_writeb }, nullptr))) {
-        return -1;
-    }
-    if (!LC86_SUCCESS(cpu_add_io_region(0x2e8, 8, io_handlers_t{ .fnr8 = bios_readb, .fnw8 = bios_writeb }, nullptr))) {
-        return -1;
-    }
-    if (!LC86_SUCCESS(cpu_add_io_region(0x92, 1, io_handlers_t{ .fnr8 = bios_readb, .fnw8 = bios_writeb }, nullptr))) {
-        return -1;
-    }
-    if (!LC86_SUCCESS(cpu_add_io_region(0x510, 2, io_handlers_t{ .fnr8 = bios_readb, .fnw8 = bios_writeb }, nullptr))) {
-        return -1;
-    }
-
-    if (!LC86_SUCCESS(cpu_add_io_region(0x3e0, 8, io_handlers_t{ .fnr8 = bios_readb, .fnw8 = bios_writeb }, nullptr))) {
-        return -1;
-    }
-    if (!LC86_SUCCESS(cpu_add_io_region(0x360, 16, io_handlers_t{ .fnr8 = bios_readb, .fnw8 = bios_writeb }, nullptr))) {
-        return -1;
-    }
-    if (!LC86_SUCCESS(cpu_add_io_region(0x1e0, 16, io_handlers_t{ .fnr8 = bios_readb, .fnw8 = bios_writeb }, nullptr))) {
-        return -1;
-    }
-    if (!LC86_SUCCESS(cpu_add_io_region(0x160, 16, io_handlers_t{ .fnr8 = bios_readb, .fnw8 = bios_writeb }, nullptr))) {
-        return -1;
-    }
-
-    if (!LC86_SUCCESS(cpu_add_io_region(0x2f0, 8, io_handlers_t{ .fnw8 = bios_writeb }, nullptr))) {
-        return -1;
-    }
-    if (!LC86_SUCCESS(cpu_add_io_region(0x270, 8, io_handlers_t{ .fnr8 = bios_readb }, nullptr))) {
-        return -1;
-    }
-    if (!LC86_SUCCESS(cpu_add_io_region(0x6f0, 8, io_handlers_t{ .fnw8 = bios_writeb }, nullptr))) {
-        return -1;
-    }
-    if (!LC86_SUCCESS(cpu_add_io_region(0x420, 2, io_handlers_t{ .fnr8 = bios_readb }, nullptr))) {
-        return -1;
-    }
-    if (!LC86_SUCCESS(cpu_add_io_region(0x4a0, 2, io_handlers_t{ .fnr8 = bios_readb }, nullptr))) {
-        return -1;
-    }
-    if (!LC86_SUCCESS(cpu_add_io_region(0xa78, 2, io_handlers_t{ .fnw8 = bios_writeb }, nullptr))) {
-        return -1;
-    }
-
-    if (!LC86_SUCCESS(cpu_add_io_region(0x22, 4, io_handlers_t{ .fnr8 = bios_readb, .fnw8 = bios_writeb }, nullptr))) {
-        return -1;
-    }
-
-    if (!pc->pci_enabled) {
-        io_handlers_t pci_handlers{ .fnr8 = bios_readb, .fnr16 = bios_readw, .fnr32 = bios_readd,
-    .fnw8 = bios_writeb, .fnw16 = bios_writew, .fnw32 = bios_writed };
-        if (!LC86_SUCCESS(cpu_add_io_region(0xCF8, 8, pci_handlers, nullptr))) {
-            return -1;
-        }
-    }
-
-    if (!pc->apic_enabled) {
-        if (!LC86_SUCCESS(cpu_add_mmio_region(0xFEE00000, 1 << 20, io_handlers_t{ .fnr8 = default_mmio_readb, .fnw8 = default_mmio_writeb }, nullptr))) {
-            return -1;
-        }
-    }
-
-    // Check writes to ROM
-    if (!pc->pci_enabled) {
-        // PCI can control ROM areas using the Programmable Attribute Map Registers, so this will be handled there
-        if (!LC86_SUCCESS(cpu_add_mmio_region(0xC0000, 0x40000, io_handlers_t{ .fnw8 = default_mmio_writeb }, nullptr))) {
-            return -1;
-        }
-    }
-
-    // The rest is just CPU initialization
-    firmware_memory_size = pc->memory_size;
-    if (!LC86_SUCCESS(cpu_add_ram_region(0, pc->memory_size))) {
-        return -1;
-    }
-
-    if (pc->pci_enabled) {
-        pci_init_mem(get_ram_ptr(g_cpu));
-    }
-
-    // Check if BIOS and VGABIOS have sane values
-    if (((uintptr_t)pc->bios.data | (uintptr_t)pc->vgabios.data) & 0xFFF) {
-        fprintf(stderr, "BIOS and VGABIOS need to be aligned on a 4k boundary\n");
-        return -1;
-    }
-    if (!pc->bios.length || !pc->vgabios.length) {
-        fprintf(stderr, "BIOS/VGABIOS length is zero\n");
-        return 0;
-    }
-
-    if (!LC86_SUCCESS(cpu_add_rom_region(0x100000 - pc->bios.length, pc->bios.length, static_cast<uint8_t *>(pc->bios.data)))) {
-        return -1;
-    }
-    if (!LC86_SUCCESS(cpu_add_rom_region(-pc->bios.length, pc->bios.length, static_cast<uint8_t *>(pc->bios.data)))) {
-        return -1;
-    }
-    if (!pc->pci_vga_enabled) {
-        if (!LC86_SUCCESS(cpu_add_rom_region(0xC0000, pc->vgabios.length, static_cast<uint8_t *>(pc->vgabios.data)))) {
-            return -1;
-        }
-    }
-
     state_register(util_state);
 
-#else
+#ifndef LIB86CPU
+
+    //cpu_set_a20(0); // causes code to be prefetched from 0xFFEFxxxx at boot
+    cpu_set_a20(1);
 
     //io_register_read(0x61, 1, bios_readb, NULL, NULL);
     io_register_read(0xB3, 1, bios_readb, NULL, NULL);

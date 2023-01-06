@@ -612,6 +612,23 @@ uint8_t mmio_readb(uint32_t addr, void *opaque)
 {
     return ram[addr];
 }
+
+#ifdef LIB86CPU
+uint16_t mmio_readw(uint32_t addr, void *opaque)
+{
+    uint16_t result = mmio_readb(addr, opaque);
+    return result | mmio_readb(addr + 1, opaque) << 8;
+}
+
+uint32_t mmio_readd(uint32_t addr, void *opaque)
+{
+    uint32_t result = mmio_readb(addr, opaque);
+    result |= mmio_readb(addr + 1, opaque) << 8;
+    result |= mmio_readb(addr + 2, opaque) << 16;
+    return result | mmio_readb(addr + 3, opaque) << 24;
+}
+#endif
+
 #ifndef LIB86CPU
 static void mmio_writeb(uint32_t addr, uint32_t data)
 #else
@@ -625,6 +642,22 @@ void mmio_writeb(uint32_t addr, const uint8_t data, void *opaque)
         PCI_LOG("Invalid write addr=%08x data=%02x\n", addr, data);
     }
 }
+
+#ifdef LIB86CPU
+void mmio_writew(uint32_t addr, const uint16_t data, void *opaque)
+{
+    mmio_writeb(addr, data & 0xFF, opaque);
+    mmio_writeb(addr + 1, (data >> 8) & 0xFF, opaque);
+}
+
+void mmio_writed(uint32_t addr, const uint32_t data, void *opaque)
+{
+    mmio_writeb(addr, data & 0xFF, opaque);
+    mmio_writeb(addr + 1, (data >> 8) & 0xFF, opaque);
+    mmio_writeb(addr + 2, (data >> 16) & 0xFF, opaque);
+    mmio_writeb(addr + 3, (data >> 24) & 0xFF, opaque);
+}
+#endif
 
 void pci_init_mem(void* a)
 {
