@@ -368,7 +368,7 @@ static
     void
     vga_write(uint32_t port, uint32_t data)
 #else
-static void vga_writew2(uint32_t port, uint16_t data, void *opaque)
+static void vga_write(uint32_t port, uint32_t data, void *opaque)
 #endif
 {
     if ((port >= 0x3B0 && port <= 0x3BF && (vga.misc & 1)) || (port >= 0x3D0 && port <= 0x3DF && !(vga.misc & 1))) {
@@ -861,12 +861,20 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
 #ifdef LIB86CPU
 void vga_writeb(uint32_t port, const uint8_t data, void *opaque)
 {
-    vga_writew2(port, data, opaque);
+    vga_write(port, data, opaque);
 }
 
 void vga_writew(uint32_t port, const uint16_t data, void *opaque)
 {
-    vga_writew2(port, data, opaque);
+    // this is necessary because the boch's bios does word accesses on the vga region at 0x3B0. Vga init doesn't register a word handler for it, so halfix
+    // uses the default word handler, which is io_default_writew
+    vga_write(port, data & 0xFF, opaque);
+    vga_write(port + 1, (data >> 8) & 0xFF, opaque);
+}
+
+void vbe_writew(uint32_t port, const uint16_t data, void *opaque)
+{
+    vga_write(port, data, opaque);
 }
 #endif
 
@@ -877,7 +885,7 @@ static
     uint32_t
     vga_read(uint32_t port)
 #else
-uint16_t vga_readw(uint32_t port, void *opaque)
+uint32_t vga_read(uint32_t port, void *opaque)
 #endif
 {
     if ((port >= 0x3B0 && port <= 0x3BF && (vga.misc & 1)) || (port >= 0x3D0 && port <= 0x3DF && !(vga.misc & 1))) {
@@ -969,7 +977,12 @@ uint16_t vga_readw(uint32_t port, void *opaque)
 #ifdef LIB86CPU
 uint8_t vga_readb(uint32_t port, void *opaque)
 {
-    return (uint8_t)vga_readw(port, opaque);
+    return (uint8_t)vga_read(port, opaque);
+}
+
+uint16_t vbe_readw(uint32_t port, void *opaque)
+{
+    return (uint16_t)vga_read(port, opaque);
 }
 #endif
 

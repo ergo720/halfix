@@ -19,7 +19,8 @@ extern uint8_t pic_elcr_read(uint32_t port, void *opaque);
 extern void pic_elcr_write(uint32_t port, const uint8_t data, void *opaque);
 extern uint8_t kbd_read(uint32_t port, void *opaque);
 extern void kbd_write(uint32_t port, const uint8_t data, void *opaque);
-extern uint16_t vga_readw(uint32_t port, void *opaque);
+extern uint16_t vbe_readw(uint32_t port, void *opaque);
+extern void vbe_writew(uint32_t port, const uint16_t data, void *opaque);
 extern void vga_writew(uint32_t port, const uint16_t data, void *opaque);
 extern uint8_t vga_readb(uint32_t port, void *opaque);
 extern void vga_writeb(uint32_t port, const uint8_t data, void *opaque);
@@ -192,12 +193,12 @@ int cpu_init(struct pc_settings *pc)
 	}
 
 	// vga
-	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, 0x3B0, 48, true, io_handlers_t{ .fnr8 = vga_readb, .fnr16 = vga_readw, .fnw8 = vga_writeb, .fnw16 = vga_writew }, nullptr))) {
+	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, 0x3B0, 48, true, io_handlers_t{ .fnr8 = vga_readb, .fnw8 = vga_writeb, .fnw16 = vga_writew }, nullptr))) {
 		return -1;
 	}
 
 	if (pc->vbe_enabled) {
-		if (!LC86_SUCCESS(mem_init_region_io(g_cpu, 0x1CE, 2, true, io_handlers_t{ .fnr16 = vga_readw, .fnw16 = vga_writew }, nullptr))) {
+		if (!LC86_SUCCESS(mem_init_region_io(g_cpu, 0x1CE, 2, true, io_handlers_t{ .fnr16 = vbe_readw, .fnw16 = vbe_writew }, nullptr))) {
 			return -1;
 		}
 	}
