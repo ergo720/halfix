@@ -250,7 +250,7 @@ static int drive_internal_read_check(struct drive_internal_info* drive, void* bu
              blocksToRead = ((((readEnd - 1) & ~BLOCK_MASK) - (position & ~BLOCK_MASK)) >> BLOCK_SHIFT) + 1;
 
     uint32_t currentFilePosition = position;
-
+    uint8_t *buffer1 = (uint8_t *)buffer;
     int retval = 0;
 
     for (unsigned int i = 0; i < blocksToRead; i++) {
@@ -272,17 +272,17 @@ static int drive_internal_read_check(struct drive_internal_info* drive, void* bu
         len = end - begin;
         //printf("BlockInformation: %p Data: %p cfp=%d\n", blockInformation, blockInformation->data, currentFilePosition / 512);
         if (blockInformation->data) {
-            retval |= drive_read_block_internal(drive, blockInformation, buffer, len, currentFilePosition);
+            retval |= drive_read_block_internal(drive, blockInformation, buffer1, len, currentFilePosition);
         } else {
             if (!no_xhr)
-                if (drive_internal_read_remote(drive, blockInformation, (uint8_t *)buffer, currentFilePosition, len) < 0)
+                if (drive_internal_read_remote(drive, blockInformation, buffer1, currentFilePosition, len) < 0)
                     DRIVE_FATAL("Unable to load disk\n");
 #ifdef SIMULATE_ASYNC_ACCESS // If we aren't simulating async, then don't set retval
             retval |= 1;
 #endif
         }
 
-        //buffer += len; //XXX: this doesn't work. Was this intended to modify the buffer pointer argument?
+        buffer1 += len;
         currentFilePosition += len;
     }
     return retval;
@@ -386,7 +386,7 @@ static int drive_internal_write_check(struct drive_internal_info* drive, void* b
 {
     drv_offset_t writeEnd = position + length,
                  blocksToWrite = ((((writeEnd - 1) & ~BLOCK_MASK) - (position & ~BLOCK_MASK)) >> BLOCK_SHIFT) + 1;
-
+    uint8_t *buffer1 = (uint8_t *)buffer;
     uint32_t currentFilePosition = position;
 
     int retval = 0;
@@ -408,17 +408,17 @@ static int drive_internal_write_check(struct drive_internal_info* drive, void* b
         len = end - begin;
         //printf("BlockInformation: %p Data: %p cfp=%d\n", blockInformation, blockInformation->data, currentFilePosition / 512);
         if (blockInformation->data)
-            retval |= drive_write_block_internal(drive, blockInformation, buffer, len, currentFilePosition);
+            retval |= drive_write_block_internal(drive, blockInformation, buffer1, len, currentFilePosition);
         else {
             if (!no_xhr)
-                if (drive_internal_write_remote(drive, blockInformation, (uint8_t *)buffer, currentFilePosition, len) < 0)
+                if (drive_internal_write_remote(drive, blockInformation, buffer1, currentFilePosition, len) < 0)
                     DRIVE_FATAL("Unable to load disk\n");
 #ifdef SIMULATE_ASYNC_ACCESS // If we aren't simulating async, then don't set retval
             retval |= 1;
 #endif
         }
 
-        //buffer += len; //XXX: this doesn't work. Was this intended to modify the buffer pointer argument?
+        buffer1 += len;
         currentFilePosition += len;
     }
     return retval;
@@ -841,20 +841,21 @@ static int drive_simple_write(void* drive, void* cb_ptr, void* buffer, uint32_t 
         DRIVE_FATAL("Length/offset must be multiple of 512 bytes\n");
 
     struct simple_driver* info = (simple_driver *)drive;
+    uint8_t *buffer1 = (uint8_t *)buffer;
 
     drv_offset_t end = size + offset;
     while (offset != end) {
         if (!info->raw_file_access) {
             if (!drive_simple_has_cache(info, offset))
                 drive_simple_add_cache(info, offset);
-            drive_simple_write_cache(info, buffer, offset);
+            drive_simple_write_cache(info, buffer1, offset);
         } else {
             UNUSED(drive_simple_add_cache);
             lseek(info->fd, offset, SEEK_SET);
-            if (write(info->fd, buffer, 512) != 512)
+            if (write(info->fd, buffer1, 512) != 512)
                 DRIVE_FATAL("Unable to write 512 bytes to image file\n");
         }
-        //buffer += 512; //XXX: this doesn't work. Was this intended to modify the buffer pointer argument?
+        buffer1 += 512;
         offset += 512;
     }
     return DRIVE_RESULT_SYNC;
@@ -870,15 +871,16 @@ static int drive_simple_read(void* drive, void* cb_ptr, void* buffer, uint32_t s
         DRIVE_FATAL("Length/offset must be multiple of 512 bytes\n");
 
     struct simple_driver* info = (simple_driver *)drive;
+    uint8_t *buffer1 = (uint8_t *)buffer;
 
     drv_offset_t end = size + offset;
     while (offset != end) {
-        if (!drive_simple_fetch_cache(info, buffer, offset)) {
+        if (!drive_simple_fetch_cache(info, buffer1, offset)) {
             lseek(info->fd, offset, SEEK_SET);
-            if (read(info->fd, buffer, 512) != 512)
+            if (read(info->fd, buffer1, 512) != 512)
                 DRIVE_FATAL("Unable to read 512 bytes from image file\n");
         }
-        //buffer += 512; //XXX: this doesn't work. Was this intended to modify the buffer pointer argument?
+        buffer1 += 512;
         offset += 512;
     }
     return DRIVE_RESULT_SYNC;
