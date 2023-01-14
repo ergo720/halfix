@@ -1191,8 +1191,8 @@ uint16_t ide_pio_readw(uint32_t port, void *opaque)
     // Penalize unaligned PIO accesses
     if ((ctrl->pio_position | ctrl->pio_length) & 1) {
 #ifdef LIB86CPU
-        uint32_t res = ide_pio_readb(port, opaque);
-        res |= ide_pio_readb(port, opaque) << 8;
+        uint16_t res = ide_pio_readb(port, opaque);
+        res |= ((uint16_t)ide_pio_readb(port, opaque) << 8);
 #else
         uint32_t res = ide_pio_readb(port);
         res |= ide_pio_readb(port) << 8;
@@ -1221,16 +1221,16 @@ uint32_t ide_pio_readd(uint32_t port, void *opaque)
     if ((ctrl->pio_position | ctrl->pio_length) & 3) {
 #ifdef LIB86CPU
         uint32_t res = ide_pio_readb(port, opaque);
-        res |= ide_pio_readb(port, opaque) << 8;
-        res |= ide_pio_readb(port, opaque) << 16;
-        res |= ide_pio_readb(port, opaque) << 24;
+        res |= ((uint32_t)ide_pio_readb(port, opaque) << 8);
+        res |= ((uint32_t)ide_pio_readb(port, opaque) << 16);
+        res |= ((uint32_t)ide_pio_readb(port, opaque) << 24);
 #else
         uint32_t res = ide_pio_readb(port);
         res |= ide_pio_readb(port) << 8;
         res |= ide_pio_readb(port) << 16;
         res |= ide_pio_readb(port) << 24;
-        return res;
 #endif
+        return res;
     }
 
     uint32_t result = ctrl->pio_buffer32[ctrl->pio_position >> 2];

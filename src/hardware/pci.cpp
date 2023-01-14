@@ -141,7 +141,7 @@ uint16_t pci_read16(uint32_t addr, void *opaque)
 {
 #ifdef LIB86CPU
     uint16_t result = pci_read(addr, opaque);
-    result |= pci_read(addr + 1, opaque) << 8;
+    result |= ((uint16_t)pci_read(addr + 1, opaque) << 8);
 #else
     uint16_t result = pci_read(addr);
     result |= pci_read(addr + 1) << 8;
@@ -156,9 +156,9 @@ uint32_t pci_read32(uint32_t addr, void *opaque)
 {
 #ifdef LIB86CPU
     uint32_t result = pci_read(addr, opaque);
-    result |= pci_read(addr + 1, opaque) << 8;
-    result |= pci_read(addr + 2, opaque) << 16;
-    result |= pci_read(addr + 3, opaque) << 24;
+    result |= ((uint32_t)pci_read(addr + 1, opaque) << 8);
+    result |= ((uint32_t)pci_read(addr + 2, opaque) << 16);
+    result |= ((uint32_t)pci_read(addr + 3, opaque) << 24);
 #else
     uint32_t result = pci_read(addr);
     result |= pci_read(addr + 1) << 8;

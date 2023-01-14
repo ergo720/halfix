@@ -289,7 +289,7 @@ void ioapic_writeb(uint32_t addr, const uint8_t data, void *opaque)
 {
     int offset = addr & 3, byte_offset = offset << 3;
     ioapic.temp_data &= ~(0xFF << byte_offset);
-    ioapic.temp_data |= data << byte_offset;
+    ioapic.temp_data |= ((uint32_t)data << byte_offset);
     if (offset == 3) {
 #ifdef LIB86CPU
         ioapic_write(addr & ~3, ioapic.temp_data, opaque);

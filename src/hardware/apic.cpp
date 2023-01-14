@@ -611,7 +611,7 @@ void apic_writeb(uint32_t addr, const uint8_t data, void *opaque)
     // Technically, we should not be doing this
     int offset = addr & 3, byte_offset = offset << 3;
     apic.temp_data &= ~(0xFF << byte_offset);
-    apic.temp_data |= data << byte_offset;
+    apic.temp_data |= ((uint32_t)data << byte_offset);
     if (offset == 3) {
 #ifdef LIB86CPU
         apic_write(addr & ~3, apic.temp_data, opaque);
