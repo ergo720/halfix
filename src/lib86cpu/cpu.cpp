@@ -146,7 +146,6 @@ int cpu_init(pc_settings *pc)
 		return -1;
 	}
 
-	register_log_func(logger);
 	if (!LC86_SUCCESS(cpu_set_flags(g_cpu, CPU_INTEL_SYNTAX))) {
 		return -1;
 	}
