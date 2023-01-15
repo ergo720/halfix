@@ -328,6 +328,7 @@ static LRESULT CALLBACK display_callback(HWND hwnd, UINT msg, WPARAM wparam, LPA
         case MENU_EXIT:
             printf("Exiting.\n");
             exit(0);
+#if 0
         case MENU_SAVE_STATE: {
             OPENFILENAME ofn;
             ZeroMemory(&ofn, sizeof(OPENFILENAME));
@@ -351,6 +352,7 @@ static LRESULT CALLBACK display_callback(HWND hwnd, UINT msg, WPARAM wparam, LPA
             }
             break;
         }
+#endif
         }
     }
     return DefWindowProc(hwnd, msg, wparam, lparam);
@@ -392,7 +394,8 @@ void display_init(void)
           file = CreateMenu();
 
     AppendMenu(file, MF_STRING, MENU_EXIT, "&Exit");
-    AppendMenu(file, MF_STRING, MENU_SAVE_STATE, "&Save State");
+    // save state is broken on Windows, so disable it
+    //AppendMenu(file, MF_STRING, MENU_SAVE_STATE, "&Save State");
 
     AppendMenu(bar, MF_POPUP, (UINT_PTR)file, "&File");
     SetMenu(hWnd, bar);
