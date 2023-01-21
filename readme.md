@@ -38,7 +38,11 @@ This fork is focused only on Windows compatibility for now. You will need a C++2
 
 ## Compatibility
 
-Currently, it can boot the Boch's BIOS when used in conjunction with the LGPL'ed VGA BIOS.
+Currently, when used with the Boch's BIOS and the LGPL'ed VGA BIOS, it can boot the Windows XP installation CD up to the point where Windows tries to set up the FPU.
+
+## Screenshots
+
+![Windows XP](docs/pics/winXP.png)
 
 ## Transferring Files
 
