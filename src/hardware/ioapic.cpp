@@ -6,7 +6,11 @@
 #include "devices.h"
 #include "pc.h"
 
+#ifdef LIB86CPU
+#define IOAPIC_LOG(x, ...)
+#else
 #define IOAPIC_LOG(x, ...) LOG("IOAPIC", x, ##__VA_ARGS__)
+#endif
 #define IOAPIC_FATAL(x, ...)          \
     do {                              \
         IOAPIC_LOG(x, ##__VA_ARGS__); \

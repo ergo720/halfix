@@ -176,8 +176,12 @@ void bios_writed(uint32_t port, const uint32_t data, void *opaque)
         bios_data[id][bios_ptr[id]++] = data;
         if (bios_ptr[id] == 100 || data == '\n') {
             bios_data[id][bios_ptr[id]] = 0;
+#ifdef LIB86CPU
+            NOP();
+#else
             fprintf(stderr, "%sBIOS says: '%s'\n", id ? "VGA" : "", bios_data[id]);
             fprintf(stderr, "%sBIOS says: '%s'\n", id ? "VGA" : "", bios_data[id]);
+#endif
             bios_ptr[id] = 0;
         }
         break;

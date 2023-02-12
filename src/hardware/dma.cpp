@@ -17,7 +17,11 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#ifdef LIB86CPU
+#define DMA_LOG(x, ...)
+#else
 #define DMA_LOG(x, ...) LOG("DMA", x, ##__VA_ARGS__)
+#endif
 #define DMA_FATAL(x, ...)          \
     do {                           \
         DMA_LOG(x, ##__VA_ARGS__); \

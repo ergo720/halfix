@@ -8,7 +8,11 @@
 #include <time.h>
 
 #define FREQUENCY 32768
+#ifdef LIB86CPU
+#define CMOS_LOG(x, ...)
+#else
 #define CMOS_LOG(x, ...) LOG("CMOS", x, ##__VA_ARGS__)
+#endif
 #define CMOS_FATAL(x, ...) FATAL("CMOS", x, ##__VA_ARGS__)
 
 #define ALARM_SEC 1

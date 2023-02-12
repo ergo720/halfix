@@ -38,7 +38,11 @@
 #define MOUSE_MIDDLE 4
 #define MOUSE_RIGHT 2
 
+#ifdef LIB86CPU
+#define KBD_LOG(x, ...)
+#else
 #define KBD_LOG(x, ...) LOG("KBD", x, ##__VA_ARGS__)
+#endif
 #define KBD_FATAL(x, ...)          \
     do {                           \
         KBD_LOG(x, ##__VA_ARGS__); \

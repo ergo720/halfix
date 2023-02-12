@@ -19,7 +19,11 @@
 #include <intrin.h>
 #endif
 
+#ifdef LIB86CPU
+#define APIC_LOG(x, ...)
+#else
 #define APIC_LOG(x, ...) LOG("APIC", x, ##__VA_ARGS__)
+#endif
 #define APIC_FATAL(x, ...) FATAL("APIC", x, ##__VA_ARGS__)
 
 #define APIC_ERROR_SEND_CHECKSUM 1

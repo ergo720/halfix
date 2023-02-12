@@ -9,7 +9,11 @@
 #include "lib86cpu/cpu.h"
 #endif
 
+#ifdef LIB86CPU
+#define ACPI_LOG(x, ...)
+#else
 #define ACPI_LOG(x, ...) LOG("ACPI", x, ##__VA_ARGS__)
+#endif
 #define ACPI_FATAL(x, ...) FATAL("ACPI", x, ##__VA_ARGS__)
 
 #define ACPI_CLOCK_SPEED 3579545

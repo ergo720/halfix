@@ -13,7 +13,11 @@
 #include <stdint.h>
 #include <string.h>
 
+#ifdef LIB86CPU
+#define FLOPPY_LOG(x, ...)
+#else
 #define FLOPPY_LOG(x, ...) LOG("FLOPPY", x, ##__VA_ARGS__)
+#endif
 #define FLOPPY_FATAL(x, ...) \
     FATAL("FLOPPY", x, ##__VA_ARGS__);
 

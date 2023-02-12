@@ -18,7 +18,11 @@
 //  - When CPU is ready to accept the interrupt (i.e. IF=1), it will send an IAC
 // * Note: masking IRQ2 on the master PIC prevents slave from handling interrupts
 
+#ifdef LIB86CPU
+#define PIC_LOG(x, ...)
+#else
 #define PIC_LOG(x, ...) LOG("PIC", x, ##__VA_ARGS__)
+#endif
 #define PIC_FATAL(x, ...)          \
     do {                           \
         PIC_LOG(x, ##__VA_ARGS__); \

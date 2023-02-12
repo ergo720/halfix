@@ -7,7 +7,11 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#define PIT_LOG(fmt, ...) LOG("PIT", fmt, ##__VA_ARGS__)
+#ifdef LIB86CPU
+#define PIT_LOG(x, ...)
+#else
+#define PIT_LOG(x, ...) LOG("PIT", fmt, ##__VA_ARGS__)
+#endif
 
 #define PIT_CLOCK_SPEED 1193182
 #define CHAN0 pit.chan[0]

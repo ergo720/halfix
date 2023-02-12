@@ -18,7 +18,11 @@
 #include "state.h"
 #include <string.h>
 
+#ifdef LIB86CPU
+#define VGA_LOG(x, ...)
+#else
 #define VGA_LOG(x, ...) LOG("VGA", x, ##__VA_ARGS__)
+#endif
 #define VGA_FATAL(x, ...)          \
     do {                           \
         VGA_LOG(x, ##__VA_ARGS__); \

@@ -11,7 +11,11 @@
 // A mostly-complete ATA implementation.
 // This version works around a bug in the Bochs BIOS. It does not check if BSY is set after a write command has been executed.
 
+#ifdef LIB86CPU
+#define IDE_LOG(x, ...)
+#else
 #define IDE_LOG(x, ...) LOG("IDE", x, ##__VA_ARGS__)
+#endif
 #define IDE_FATAL(x, ...) \
     FATAL("IDE", x, ##__VA_ARGS__);
 
