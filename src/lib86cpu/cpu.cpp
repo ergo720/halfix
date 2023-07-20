@@ -91,11 +91,13 @@ lc86_status cpu_add_rom_region(addr_t addr, uint32_t size, uint8_t *buffer)
 
 void cpu_pause()
 {
+	cpu_paused = 1;
 	cpu_suspend(g_cpu, true);
 }
 
 void cpu_resume()
 {
+	cpu_paused = 0;
 	cpu_resume(g_cpu);
 }
 

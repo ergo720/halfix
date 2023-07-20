@@ -483,7 +483,14 @@ void pc_execute()
         // this updates the states of cmos, pit, apic and acpi, and calculates the first occurring deadline among them
         itick_t next_deadline = devices_get_next(get_now(), nullptr);
         auto ret = cpu_run_until(g_cpu, next_deadline);
-        if ((ret != lc86_status::timeout) && (ret != lc86_status::paused)) [[unlikely]] {
+        if (ret != lc86_status::timeout) [[unlikely]] {
+            if (ret == lc86_status::paused) {
+                vga_update();
+                while (cpu_paused) {
+                    display_handle_events();
+                }
+                continue;
+            }
             fprintf(stderr, "Emulation terminated with status %d. The error was \"%s\"\n", ret, get_last_error().c_str());
             return;
         }

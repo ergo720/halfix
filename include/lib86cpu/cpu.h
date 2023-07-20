@@ -15,3 +15,4 @@ void cpu_pause();
 void cpu_resume();
 
 inline cpu_t *g_cpu;
+inline int cpu_paused = 0;

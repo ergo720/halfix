@@ -28,9 +28,6 @@ static int windowx, windowy;
 static int lastx, lasty;
 // Coordinates of cursor when captured
 static int original_x, original_y;
-#ifdef LIB86CPU
-static int cpu_paused;
-#endif
 
 enum {
     MENU_EXIT,
@@ -295,6 +292,15 @@ static LRESULT CALLBACK display_callback(HWND hwnd, UINT msg, WPARAM wparam, LPA
         printf("Exiting.\n");
         exit(0);
         break;
+    case WM_SIZE:
+#ifdef LIB86CPU
+        if (cpu_paused && (wparam == SIZE_RESTORED)) {
+            // Force redrawing the screen when the cpu is paused and restoring the window after it was minimized.
+            // Otherwise, the window will be empty after being restored
+            display_update(0, 0);
+        }
+#endif
+        break;
     case WM_KEYDOWN:
         if (wparam == VK_ESCAPE && mouse_enabled)
             display_capture_mouse(0);
@@ -371,13 +377,11 @@ static LRESULT CALLBACK display_callback(HWND hwnd, UINT msg, WPARAM wparam, LPA
 #endif
 #ifdef LIB86CPU
         case MENU_PAUSE:
-            cpu_paused = 1;
             cpu_pause();
             display_set_title();
             break;
 
         case MENU_RESUME:
-            cpu_paused = 0;
             cpu_resume();
             display_set_title();
             break;
