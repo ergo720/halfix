@@ -10,6 +10,9 @@
 #include <windowsx.h>
 
 #include "util.h"
+#ifdef LIB86CPU
+#include "lib86cpu/cpu.h"
+#endif
 
 static HINSTANCE hInst;
 static HWND hWnd;
@@ -25,10 +28,15 @@ static int windowx, windowy;
 static int lastx, lasty;
 // Coordinates of cursor when captured
 static int original_x, original_y;
+#ifdef LIB86CPU
+static int cpu_paused;
+#endif
 
 enum {
     MENU_EXIT,
-    MENU_SAVE_STATE
+    MENU_SAVE_STATE,
+    MENU_PAUSE,
+    MENU_RESUME,
 };
 
 static inline void lparam_to_xy(LPARAM lparam, int* x, int* y)
@@ -40,10 +48,18 @@ static inline void lparam_to_xy(LPARAM lparam, int* x, int* y)
 static void display_set_title(void)
 {
     char buffer[1000];
+#ifndef LIB86CPU
     sprintf(buffer, "Halfix x86 Emulator - "
-                    " [%d x %d] - %s",
+        " [%d x %d] - %s",
         cwidth, cheight,
         mouse_enabled ? "Press ESC to release mouse" : "Right-click to capture mouse");
+#else
+    sprintf(buffer, "Halfix x86 Emulator - "
+        " [%d x %d] - %s%s",
+        cwidth, cheight,
+        mouse_enabled ? "Press ESC to release mouse" : "Right-click to capture mouse",
+        cpu_paused ? " , paused" : "");
+#endif
     SetWindowText(hWnd, buffer);
 }
 
@@ -353,6 +369,19 @@ static LRESULT CALLBACK display_callback(HWND hwnd, UINT msg, WPARAM wparam, LPA
             break;
         }
 #endif
+#ifdef LIB86CPU
+        case MENU_PAUSE:
+            cpu_paused = 1;
+            cpu_pause();
+            display_set_title();
+            break;
+
+        case MENU_RESUME:
+            cpu_paused = 0;
+            cpu_resume();
+            display_set_title();
+            break;
+#endif
         }
     }
     return DefWindowProc(hwnd, msg, wparam, lparam);
@@ -396,6 +425,10 @@ void display_init(void)
     AppendMenu(file, MF_STRING, MENU_EXIT, "&Exit");
     // save state is broken on Windows, so disable it
     //AppendMenu(file, MF_STRING, MENU_SAVE_STATE, "&Save State");
+#ifdef LIB86CPU
+    AppendMenu(file, MF_STRING, MENU_PAUSE, "&Pause");
+    AppendMenu(file, MF_STRING, MENU_RESUME, "&Resume");
+#endif
 
     AppendMenu(bar, MF_POPUP, (UINT_PTR)file, "&File");
     SetMenu(hWnd, bar);

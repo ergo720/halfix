@@ -89,6 +89,16 @@ lc86_status cpu_add_rom_region(addr_t addr, uint32_t size, uint8_t *buffer)
 	return mem_init_region_rom(g_cpu, addr, size, buffer);
 }
 
+void cpu_pause()
+{
+	cpu_suspend(g_cpu, true);
+}
+
+void cpu_resume()
+{
+	cpu_resume(g_cpu);
+}
+
 static void
 logger(log_level lv, const unsigned count, const char *msg, ...)
 {
