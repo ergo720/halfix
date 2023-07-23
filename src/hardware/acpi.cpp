@@ -180,7 +180,11 @@ void acpi_sm_write(uint32_t addr, const uint8_t data, void *opaque)
 }
 
 // Remap power management base addresses
+#ifdef LIB86CPU
+static void acpi_remap_pmba(uint32_t old, uint32_t io)
+#else
 static void acpi_remap_pmba(uint32_t io)
+#endif
 {
     ACPI_LOG("Remapping Power Management I/O ports to %04x\n", io);
     // Try to not conflict with DMA i/o ports
@@ -195,8 +199,8 @@ static void acpi_remap_pmba(uint32_t io)
         io_register_write(acpi.pmba, 64, acpi_pm_write, NULL, NULL);
     }
 #else
-    if (acpi.pmba != 0) {
-        cpu_destroy_io_region(acpi.pmba, 64);
+    if (old != 0) {
+        cpu_destroy_io_region(old, 64);
     }
     acpi.pmba = io & 0xFFC0;
     if (io != 0) {
@@ -206,7 +210,11 @@ static void acpi_remap_pmba(uint32_t io)
     }
 #endif
 }
+#ifdef LIB86CPU
+static void acpi_remap_smba(uint32_t old, uint32_t io)
+#else
 static void acpi_remap_smba(uint32_t io)
+#endif
 {
     ACPI_LOG("Remapping System Management I/O ports to %04x\n", io);
     // Try to not conflict with DMA i/o ports
@@ -221,8 +229,8 @@ static void acpi_remap_smba(uint32_t io)
         io_register_write(acpi.smba, 64, acpi_sm_write, NULL, NULL);
     }
 #else
-    if (acpi.smba != 0) {
-        cpu_destroy_io_region(acpi.smba, 64);
+    if (old != 0) {
+        cpu_destroy_io_region(old, 64);
     }
     acpi.smba = io & 0xFFC0;
     if (io != 0) {
@@ -304,7 +312,11 @@ static int acpi_pci_write(uint8_t* ptr, uint8_t addr, uint8_t data)
     case 0x43: // Power Management Base Address
         ptr[addr] = data | (addr == 0x40); // Bit 0 of byte 0x40 must be 1
         if (addr == 0x43)
+#ifdef LIB86CPU
+            acpi_remap_pmba(acpi.pmba, read32le(ptr, 0x40));
+#else
             acpi_remap_pmba(read32le(ptr, 0x40));
+#endif
         return 0;
     case 0x58:
     case 0x59:
@@ -320,7 +332,11 @@ static int acpi_pci_write(uint8_t* ptr, uint8_t addr, uint8_t data)
     case 0x93: // System Management Base Address
         ptr[addr] = data | (addr == 0x90); // Bit 0 of byte 0x90 must be 1
         if (addr == 0x93)
+#ifdef LIB86CPU
+            acpi_remap_smba(acpi.smba, read32le(ptr, 0x90));
+#else
             acpi_remap_smba(read32le(ptr, 0x90));
+#endif
         return 0;
     case 0xD2: // SMBus host configuration
         acpi.smiose = data & 1;
@@ -366,6 +382,7 @@ itick_t acpi_next(itick_t now_tick)
 
 static void acpi_state(void)
 {
+    uint32_t pmba = acpi.pmba, smba = acpi.smba;
     // <<< BEGIN AUTOGENERATE "state" >>>
     struct bjson_object* obj = state_obj("acpi", 8);
     state_field(obj, 4, "acpi.enabled", &acpi.enabled);
@@ -378,8 +395,10 @@ static void acpi_state(void)
     state_field(obj, 4, "acpi.smiose", &acpi.smiose);
 // <<< END AUTOGENERATE "state" >>>
     // Remap IO
-    acpi_remap_pmba(acpi.pmba);
-    acpi_remap_smba(acpi.smba);
+    if (state_is_reading()) {
+        acpi_remap_pmba(pmba, acpi.pmba);
+        acpi_remap_smba(smba, acpi.smba);
+    }
 }
 
 void acpi_init(struct pc_settings* pc)

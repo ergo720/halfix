@@ -101,8 +101,40 @@ void cpu_resume()
 	cpu_resume(g_cpu);
 }
 
-static void
-logger(log_level lv, const unsigned count, const char *msg, ...)
+// If this is false, then the code below must save/load one cpu member at a time, instead of just using memcpy
+static_assert(std::is_trivially_copyable_v<cpu_save_state_t>);
+
+static void cpu_state()
+{
+	cpu_save_state_t cpu_state;
+	ram_save_state_t ram_state;
+	size_t ram_size;
+
+	struct bjson_object *obj = state_obj("cpu", 3);
+
+	if (state_is_reading()) {
+		state_field(obj, sizeof(cpu_save_state_t), "cpu_state", &cpu_state);
+		state_field(obj, 4, "ram_id", &ram_state.id);
+		state_field(obj, sizeof(size_t), "ram_size", &ram_size);
+		ram_state.ram.resize(ram_size);
+		state_file(ram_size, "ram", ram_state.ram.data());
+		if (!LC86_SUCCESS(cpu_restore_snapshot(g_cpu, &cpu_state, &ram_state, pic_get_interrupt))) {
+			exit(0);
+		}
+	}
+	else {
+		if (!LC86_SUCCESS(cpu_take_snapshot(g_cpu, &cpu_state, &ram_state))) {
+			exit(0);
+		}
+		ram_size = ram_state.ram.size();
+		state_field(obj, sizeof(cpu_save_state_t), "cpu_state", &cpu_state);
+		state_field(obj, 4, "ram_id", &ram_state.id);
+		state_field(obj, sizeof(size_t), "ram_size", &ram_size);
+		state_file(ram_size, "ram", ram_state.ram.data());
+	}
+}
+
+static void logger(log_level lv, const unsigned count, const char *msg, ...)
 {
 	std::string str;
 	switch (lv)
@@ -451,6 +483,8 @@ int cpu_init(pc_settings *pc)
 			return -1;
 		}
 	}
+
+	state_register(cpu_state);
 
     return 0;
 }

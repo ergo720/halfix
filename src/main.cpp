@@ -29,13 +29,19 @@ struct option {
 enum {
     OPTION_HELP,
     OPTION_CONFIG,
-    OPTION_REALTIME
+    OPTION_REALTIME,
+#ifdef LIB86CPU
+    OPTION_LOAD_STATE
+#endif
 };
 
 static const struct option options[] = {
     { "h", "help", 0, OPTION_HELP, "Show available options" },
     { "c", "config", HASARG, OPTION_CONFIG, "Use custom config file [arg]" },
     { "r", "realtime", 0, OPTION_REALTIME, "Try to sync internal emulator clock with wall clock" },
+#ifdef LIB86CPU
+    { "l", "load_state", 0, OPTION_LOAD_STATE, "Load a save state upon starting halfix" },
+#endif
     { NULL, NULL, 0, 0, NULL }
 };
 
@@ -69,7 +75,11 @@ int main(int argc, char** argv)
     UNUSED(argv);
 
     const char* configfile = "default.conf";
+#ifdef LIB86CPU
+    int filesz, realtime = 0, ld_st = 0;
+#else
     int filesz, realtime = 0;
+#endif
     FILE* f;
     char* buf;
 
@@ -104,6 +114,11 @@ int main(int argc, char** argv)
                 case OPTION_REALTIME:
                     realtime = -1;
                     continue;
+#ifdef LIB86CPU
+                case OPTION_LOAD_STATE:
+                    ld_st = 1;
+                    continue;
+#endif
                 }
                 break;
             }
@@ -158,7 +173,7 @@ parse_config:
 
     timer_init();
 
-    if (pc_init(&pc) == -1) {
+    if (pc_init(&pc, ld_st) == -1) {
         fprintf(stderr, "Unable to initialize PC\n");
         return -1;
     }

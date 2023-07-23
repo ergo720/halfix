@@ -19,6 +19,7 @@
 #include <string.h>
 
 #ifdef LIB86CPU
+void vga_mmio_remap(uint32_t old, uint32_t newstart, bool shout_int);
 #define VGA_LOG(x, ...)
 #else
 #define VGA_LOG(x, ...) LOG("VGA", x, ##__VA_ARGS__)
@@ -122,6 +123,7 @@ static void vga_alloc_mem(void)
 
 static void vga_state(void)
 {
+    uint32_t vgabios_addr = vga.vgabios_addr;
     // <<< BEGIN AUTOGENERATE "state" >>>
     struct bjson_object* obj = state_obj("vga", 42);
     state_field(obj, 256, "vga.crt", &vga.crt);
@@ -168,6 +170,9 @@ static void vga_state(void)
     state_field(obj, 4, "vga.vram_size", &vga.vram_size);
 // <<< END AUTOGENERATE "state" >>>
     if (state_is_reading()) {
+#ifdef LIB86CPU
+        vga_mmio_remap(vgabios_addr, vga.vgabios_addr, false);
+#endif
         vga_update_size();
         vga_alloc_mem();
     }
@@ -1583,11 +1588,19 @@ void vga_mem_writew(uint32_t addr, const uint16_t data, void *opaque)
     vga_mem_writeb(addr + 1, (data >> 8) & 0xFF, opaque);
 }
 
-uint32_t vgabios_addr;
-
 uint8_t vga_rom_readb(uint32_t addr, void *opaque);
 
 void vga_rom_writeb(uint32_t addr, const uint8_t data, void *opaque);
+
+void vga_mmio_remap(uint32_t old, uint32_t newstart, bool shout_int)
+{
+    if (!LC86_SUCCESS(mem_destroy_region(g_cpu, old, 0x20000, false, shout_int))) {
+        VGA_FATAL("Failed to destroy old VGA mmio region\n");
+    }
+    if (!LC86_SUCCESS(mem_init_region_io(g_cpu, newstart, 0x20000, false, io_handlers_t{ .fnr8 = vga_rom_readb, .fnw8 = vga_rom_writeb }, nullptr, shout_int))) {
+        VGA_FATAL("Failed to remap new VGA mmio region\n");
+    }
+}
 #endif
 
 static const uint8_t pci_config_space[16] = { 0x34, 0x12, 0x11, 0x11, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0 };
@@ -1625,17 +1638,11 @@ static int vga_pci_write(uint8_t* ptr, uint8_t addr, uint8_t data)
 #else
         if (new_mmio == 0xFFFFFFFE) {
             // writing a value of 0xFFFFFFFE to the expansion rom base address register of pci is used to check for the presence of a rom with the device. Reading
-            // back a value of zero means that a ROM doens't exist, otherwise there is one. Since there is a vgabios rom associated with vga but this is a special
+            // back a value of zero means that a ROM doesn't exist, otherwise there is one. Since there is a vgabios rom associated with vga but this is a special
             // value, we don't need to do any remapping here
         }
         else {
-            if (!LC86_SUCCESS(mem_destroy_region(g_cpu, vgabios_addr, 0x20000, false, true))) {
-                VGA_FATAL("Failed to destroy old VGA mmio region\n");
-            }
-            if (!LC86_SUCCESS(mem_init_region_io(g_cpu, new_mmio, 0x20000, false, io_handlers_t{ .fnr8 = vga_rom_readb, .fnw8 = vga_rom_writeb }, nullptr, true))) {
-                VGA_FATAL("Failed to remap new VGA mmio region\n");
-            }
-            vgabios_addr = new_mmio;
+            vga_mmio_remap(vga.vgabios_addr, new_mmio, true);
         }
 #endif
         vga.vgabios_addr = new_mmio;
@@ -1672,7 +1679,7 @@ static void vga_pci_init(struct loaded_file* vgabios)
     io_register_mmio_read(vga.vgabios_addr = 0xFEB00000, 0x20000, vga_rom_readb, NULL, NULL);
     io_register_mmio_write(vga.vgabios_addr, 0x20000, vga_rom_writeb, NULL, NULL);
 #else
-    vgabios_addr = vga.vgabios_addr = 0xFEB00000;
+    vga.vgabios_addr = 0xFEB00000;
 #endif
 
     vga.rom = (uint8_t *)calloc(1, 65536);

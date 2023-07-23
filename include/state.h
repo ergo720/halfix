@@ -4,9 +4,10 @@
 #include <stdint.h>
 
 typedef void (*state_handler)(void);
-void state_read_from_file(char* path);
-void state_store_to_file(char* path);
+void state_read_from_file(const char* path);
+void state_store_to_file(const char* path);
 void state_register(state_handler s);
+char *normalize(const char *a);
 
 #define TYPE_DATA 0
 #define TYPE_OBJECT 1
@@ -58,6 +59,14 @@ void state_string(struct bjson_object* cur, const char* name, char** val);
 char* state_get_path_base(void);
 
 #define FIELD(y) state_field(obj, sizeof(y), #y, &y)
+
+#if defined(_WIN32) && !defined(EMSCRIPTEN)
+#define PATHSEP '\\'
+#define PATHSEP_STR "\\"
+#else
+#define PATHSEP '/'
+#define PATHSEP_STR "/"
+#endif
 
 
 #ifdef EMSCRIPTEN

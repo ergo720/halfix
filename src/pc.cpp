@@ -267,7 +267,7 @@ uint8_t default_mmio_readb(uint32_t a, void *opaque)
 // XXX Very very bad hack to make timing work (see util.c)
 void util_state(void);
 
-int pc_init(struct pc_settings *pc)
+int pc_init(struct pc_settings *pc, int load_st)
 {
 #ifdef LIB86CPU
     if (cpu_init(pc) == -1)
@@ -280,7 +280,7 @@ int pc_init(struct pc_settings *pc)
 #endif
     dma_init();
     cmos_init(pc->current_time);
-    pc_init_cmos(pc); // must come before floppy initalization b/c reg 0x14
+    pc_init_cmos(pc); // must come before floppy initialization b/c reg 0x14
     fdc_init(pc);
     pit_init();
     pic_init(pc);
@@ -301,6 +301,10 @@ int pc_init(struct pc_settings *pc)
     display_init();
 
     state_register(util_state);
+
+    if (load_st) {
+        state_read_from_file("savestates" PATHSEP_STR);
+    }
 
 #ifndef LIB86CPU
 

@@ -277,7 +277,6 @@ static inline void display_kbd_send_key(int k)
 
 static LRESULT CALLBACK display_callback(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
-    char filename[4096];
     switch (msg) {
     case WM_CREATE:
         break;
@@ -350,32 +349,21 @@ static LRESULT CALLBACK display_callback(HWND hwnd, UINT msg, WPARAM wparam, LPA
         case MENU_EXIT:
             printf("Exiting.\n");
             exit(0);
-#if 0
-        case MENU_SAVE_STATE: {
-            OPENFILENAME ofn;
-            ZeroMemory(&ofn, sizeof(OPENFILENAME));
-
-            ofn.lStructSize = sizeof(OPENFILENAME);
-            ofn.hwndOwner = hWnd;
-            ofn.lpstrFilter = "All files (*.)\0*.*\0\0";
-            filename[0] = 0;
-            ofn.lpstrFile = filename;
-            ofn.nMaxFile = 4095;
-            ofn.Flags = OFN_EXPLORER;
-            ofn.lpstrDefExt = "";
-            ofn.lpstrTitle = "Save state to...";
-            ofn.lpstrInitialDir = ".";
-
-            if (GetSaveFileName(&ofn)) {
-                state_store_to_file(filename);
-                printf("SELECTED\n");
-            } else {
-                printf("NOT SELECTED\n");
-            }
-            break;
-        }
-#endif
 #ifdef LIB86CPU
+        case MENU_SAVE_STATE: {
+            char filename[4096];
+            const auto ret = GetModuleFileName(NULL, filename, sizeof(filename));
+            if ((ret == 0) || ((ret == sizeof(filename)) && (GetLastError() == ERROR_INSUFFICIENT_BUFFER))) {
+                printf("FAILED TO CREATE SAVE STATE\n");
+            }
+            else {
+                filename[strlen(filename) - strlen("halfix.exe")] = '\0';
+                strncat(filename, "savestates", strlen("savestates"));
+                state_store_to_file(filename);
+            }
+        }
+        break;
+
         case MENU_PAUSE:
             cpu_pause();
             display_set_title();
@@ -427,9 +415,8 @@ void display_init(void)
           file = CreateMenu();
 
     AppendMenu(file, MF_STRING, MENU_EXIT, "&Exit");
-    // save state is broken on Windows, so disable it
-    //AppendMenu(file, MF_STRING, MENU_SAVE_STATE, "&Save State");
 #ifdef LIB86CPU
+    AppendMenu(file, MF_STRING, MENU_SAVE_STATE, "&Save State");
     AppendMenu(file, MF_STRING, MENU_PAUSE, "&Pause");
     AppendMenu(file, MF_STRING, MENU_RESUME, "&Resume");
 #endif

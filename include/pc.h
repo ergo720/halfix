@@ -107,11 +107,12 @@ enum {
     BOOT_CDROM = 3
 };
 
-int pc_init(struct pc_settings* pc);
 #ifdef LIB86CPU
+int pc_init(struct pc_settings *pc, int load_st);
 void pc_execute();
 extern uint64_t next_deadline;
 #else
+int pc_init(struct pc_settings *pc);
 int pc_execute(void);
 #endif
 uint32_t pc_run(void);

@@ -1402,6 +1402,10 @@ static void pci_state(void)
             state_field(obj, 256, pci_name, pci.configuration_address_spaces[i]);
         }
     }
+
+    if (state_is_reading()) {
+        pci_82371sb_ide_remap(0xc000 | 1);
+    }
 }
 
 void pci_init(struct pc_settings* pc)

@@ -109,7 +109,11 @@ static itick_t tick_base;
 void util_state(void)
 {
     struct bjson_object* obj = state_obj("util", 1);
+#ifdef LIB86CPU
+    state_field(obj, 8, "exec_time", &exec_time);
+#else
     state_field(obj, 8, "tick_base", &tick_base);
+#endif
 }
 
 #ifdef _WIN32

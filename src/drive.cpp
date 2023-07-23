@@ -573,7 +573,7 @@ static void drive_internal_state(void* this_ptr, char* pn)
     struct bjson_object* obj = state_obj(pn, 4 + drive->path_count + 1);
 
     state_field(obj, 4, "size", &drive->size);
-    state_field(obj, 4, "path_count", &drive->path_count);
+    //state_field(obj, 4, "path_count", &drive->path_count);
     state_field(obj, 4, "block_count", &drive->block_count);
     uint32_t* block_infos = (uint32_t *)alloca(drive->block_count * 4);
 
@@ -603,7 +603,7 @@ static void drive_internal_state(void* this_ptr, char* pn)
         }
     } else {
         char pathname[1000];
-        sprintf(pathname, "%s/%s", state_get_path_base(), pn);
+        sprintf(pathname, "%s" PATHSEP_STR "%s", state_get_path_base(), pn);
         state_mkdir(pathname);
 
         uint32_t path_count = drive->path_count;

@@ -24,14 +24,6 @@ typedef SSIZE_T ssize_t;
 #include <emscripten.h>
 #endif
 
-#if defined(_WIN32) && !defined(EMSCRIPTEN)
-#define PATHSEP '\\'
-#define PATHSEP_STR "\\"
-#else
-#define PATHSEP '/'
-#define PATHSEP_STR "/"
-#endif
-
 // Binary reader/writer helpers
 struct rstream {
     uint8_t* buf;
@@ -427,7 +419,7 @@ void state_file(int size, const char* name, void* ptr)
 #endif
     }
 }
-static char* normalize(char* a)
+char* normalize(const char* a)
 {
     int len = strlen(a);
     char* res;
@@ -442,7 +434,7 @@ static char* normalize(char* a)
     return res;
 }
 
-void state_read_from_file(char* fn)
+void state_read_from_file(const char* fn)
 {
     char path[1000];
     global_file_base = normalize(fn);
@@ -476,7 +468,7 @@ void state_read_from_file(char* fn)
     free(buf);
 }
 
-void state_store_to_file(char* fn)
+void state_store_to_file(const char* fn)
 {
     char path[1000];
     struct wstream w;
