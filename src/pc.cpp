@@ -10,6 +10,9 @@
 #include "io2.h"
 #include "state.h"
 #include "util.h"
+#ifdef _WIN32
+#include "windows.h"
+#endif
 
 // Comment below line to disable automatic loading of savestate
 //#define SAVESTATE
@@ -478,7 +481,12 @@ void pc_set_fast(int yes){
 void pc_execute()
 {
     cpu_sync_state(g_cpu);
-
+#ifdef _WIN32
+    LARGE_INTEGER freq;
+    QueryPerformanceFrequency(&freq);
+    LARGE_INTEGER StartingTime, EndingTime, ElapsedNanoseconds;
+    QueryPerformanceCounter(&StartingTime);
+#endif
     // main pc execution loop
     while (true) {
         // Call the callback if needed, for async drive cases
@@ -496,6 +504,13 @@ void pc_execute()
                 continue;
             }
             fprintf(stderr, "Emulation terminated with status %d. The error was \"%s\"\n", ret, get_last_error().c_str());
+#ifdef _WIN32
+            QueryPerformanceCounter(&EndingTime);
+            ElapsedNanoseconds.QuadPart = EndingTime.QuadPart - StartingTime.QuadPart;
+            ElapsedNanoseconds.QuadPart *= 1000000000;
+            ElapsedNanoseconds.QuadPart /= freq.QuadPart;
+            printf("ns elapsed: %I64d\n", ElapsedNanoseconds.QuadPart);
+#endif
             return;
         }
 
