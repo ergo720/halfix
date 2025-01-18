@@ -94,7 +94,7 @@ static void ioapic_update(void)
                 type = 3; // Match it up with the APIC's LVT lowest priority thing
                 goto done;
             case DELIVERY_EXTINT:
-                irq_number = pic_get_interrupt(); // Is this right? IDK
+                irq_number = pic_get_interrupt(nullptr); // Is this right? IDK
             // INTENTIONAL FALLTHROUGH
             default:
                 UNUSED(hi);

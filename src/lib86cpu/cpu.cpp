@@ -64,27 +64,27 @@ extern uint8_t default_mmio_readb(uint32_t a, void *opaque);
 extern void default_mmio_writeb(uint32_t a, const uint8_t b, void *opaque);
 
 
-void cpu_destroy_io_region(uint32_t port, uint32_t size)
+void cpu_destroy_io_region(uint32_t port, uint64_t size)
 {
 	mem_destroy_region(g_cpu, port, size, true);
 }
 
-lc86_status cpu_add_io_region(port_t port, uint32_t size, io_handlers_t handlers, void *opaque)
+lc86_status cpu_add_io_region(port_t port, uint64_t size, io_handlers_t handlers, void *opaque)
 {
 	return mem_init_region_io(g_cpu, port, size, true, handlers, opaque);
 }
 
-lc86_status cpu_add_mmio_region(addr_t addr, uint32_t size, io_handlers_t handlers, void *opaque)
+lc86_status cpu_add_mmio_region(addr_t addr, uint64_t size, io_handlers_t handlers, void *opaque)
 {
 	return mem_init_region_io(g_cpu, addr, size, false, handlers, opaque);
 }
 
-lc86_status cpu_add_ram_region(addr_t addr, uint32_t size)
+lc86_status cpu_add_ram_region(addr_t addr, uint64_t size)
 {
 	return mem_init_region_ram(g_cpu, addr, size);
 }
 
-lc86_status cpu_add_rom_region(addr_t addr, uint32_t size, uint8_t *buffer)
+lc86_status cpu_add_rom_region(addr_t addr, uint64_t size, uint8_t *buffer)
 {
 	return mem_init_region_rom(g_cpu, addr, size, buffer);
 }
@@ -118,7 +118,7 @@ static void cpu_state()
 		state_field(obj, sizeof(size_t), "ram_size", &ram_size);
 		ram_state.ram.resize(ram_size);
 		state_file(ram_size, "ram", ram_state.ram.data());
-		if (!LC86_SUCCESS(cpu_restore_snapshot(g_cpu, &cpu_state, &ram_state, pic_get_interrupt))) {
+		if (!LC86_SUCCESS(cpu_restore_snapshot(g_cpu, &cpu_state, &ram_state, std::make_pair(pic_get_interrupt, nullptr)))) {
 			exit(0);
 		}
 	}
@@ -185,7 +185,7 @@ static void copy_rom_to_ram(pc_settings *pc, uint32_t addr, uint32_t size, void 
 // Initializes CPU
 int cpu_init(pc_settings *pc)
 {
-	if (!LC86_SUCCESS(cpu_new(pc->memory_size, g_cpu, pic_get_interrupt))) {
+	if (!LC86_SUCCESS(cpu_new(pc->memory_size, g_cpu, std::make_pair(pic_get_interrupt, nullptr)))) {
 		fprintf(stderr, "Failed to initialize lib86cpu!\n");
 		return -1;
 	}

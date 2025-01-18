@@ -259,7 +259,7 @@ static uint8_t pic_internal_get_interrupt(struct pic_controller* ctrl)
 }
 
 #ifdef LIB86CPU
-uint16_t pic_get_interrupt()
+uint16_t pic_get_interrupt(void *opaque)
 #else
 uint8_t pic_get_interrupt(void)
 #endif

@@ -25,7 +25,7 @@ uint8_t cmos_get(uint8_t where);
 void pic_raise_irq(int);
 void pic_lower_irq(int);
 #ifdef LIB86CPU
-uint16_t pic_get_interrupt();
+uint16_t pic_get_interrupt(void *opaque);
 #else
 uint8_t pic_get_interrupt(void);
 #endif
